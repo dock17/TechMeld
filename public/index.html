@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="TechMeld">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="TechMeld">
+  <meta name="description" content="Technische Dienst Management - Meldingen voor ziekenhuizen, zorginstellingen en hotels">
+  <meta name="author" content="TechMeld">
+  <meta name="copyright" content="© 2026 TechMeld. Alle rechten voorbehouden.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>TechMeld™ — Technische Dienst Management</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-functions-compat.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body,#root{height:100%;width:100%;margin:0}
+    body{background:#f8fafc;font-family:'Inter',system-ui,sans-serif;color:#1e293b;-webkit-font-smoothing:antialiased}
+    .app-shell{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+    ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+    input::placeholder,textarea::placeholder{color:#94a3b8}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+    .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:#fff;border-top:1px solid #e2e8f0;padding:4px 8px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
+    @media(max-width:768px){.mobile-nav{display:flex}.desktop-sidebar{display:none!important}.main-content{padding-bottom:68px!important}}
+    @media print{body::before{content:"© 2026 TechMeld™ — Vertrouwelijk";display:block;padding:8px;font-size:10px;text-align:center;color:#999;border-bottom:1px solid #e5e7eb}}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function(){console.log('%c© TechMeld™ — Alle rechten voorbehouden','color:#2563eb;font-size:14px;font-weight:bold');console.log('%cBeschermd door Belgisch Auteursrecht & EU-richtlijn 2009/24/EG.','color:#64748b;font-size:11px')})();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(()=>{})})}
+let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;window.dispatchEvent(new CustomEvent('pwa-installable'))});
+
+// ═══════════════════════════════════════════
+// FIREBASE CONFIG & INITIALIZATION
+// ═══════════════════════════════════════════
+// ⚠️ VUL HIER JE EIGEN FIREBASE CONFIG IN
+// Ga naar Firebase Console > Project Settings > General > Your apps > Config
+const firebaseConfig = {
+  apiKey: "AIzaSyDGgQBiHQVa8z8khvrIKp392mc_d8dDEJU",
+  authDomain: "techmeld.firebaseapp.com",
+  projectId: "techmeld",
+  storageBucket: "techmeld.firebasestorage.app",
+  messagingSenderId: "460267327070",
+  appId: "1:460267327070:web:8772a5e513bf912bb22ecf",
+  measurementId: "G-W17MQFNPK3"
+};
+
+// Initialize Firebase
+let fb = null, auth = null, db = null, storage = null, messaging = null, functions = null;
+let firebaseReady = false;
+const VAPID_KEY = "BHPoEmgQs-YqKYBYlXsTWS_zAjpvJ8PBdsjowoU77STg9d5ExdDXG5-3TvVnAjQhRp_xgD40vx7XX92L3rXRxDk";
+try {
+  fb = firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+  storage = firebase.storage();
+  // Initialize FCM
+  if('Notification' in window && firebase.messaging.isSupported()){
+    messaging = firebase.messaging();
+  }
+  // Enable offline persistence
+  db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+  // Initialize Cloud Functions (europe-west1)
+  functions = firebase.app().functions("europe-west1");
+  firebaseReady = firebaseConfig.apiKey && firebaseConfig.apiKey !== "JOUW_API_KEY";
+  if(!firebaseReady) console.warn("⚠️ Firebase config niet ingevuld — app werkt in demo-modus. Vul je Firebase config in om data op te slaan.");
+} catch(e) {
+  console.warn("Firebase init error:", e);
+}
+
+// ═══════════════════════════════════════════
+// FIREBASE DATABASE SERVICE
+// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// PUSH NOTIFICATIONS (FCM + Browser)
+// ═══════════════════════════════════════════
+const PushNotify={
+  supported:'Notification' in window,
+  token:null,
+  knownIds:new Set(),
+  get permission(){return this.supported?Notification.permission:'denied'},
+  async requestPermission(){
+    if(!this.supported)return false;
+    var result=await Notification.requestPermission();
+    return result==='granted';
+  },
+  async getFCMToken(){
+    if(!messaging)return null;
+    try{
+      var reg=await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js')||await navigator.serviceWorker.ready;
+      var token=await messaging.getToken({vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
+      this.token=token;
+      return token;
+    }catch(e){console.warn('FCM token error:',e);return null}
+  },
+  async registerAndSave(userId,orgId){
+    var granted=await this.requestPermission();
+    if(!granted)return null;
+    var token=await this.getFCMToken();
+    if(token){
+      await DB.saveFCMToken(userId,orgId,token);
+      console.log('FCM token saved');
+    }
+    return token;
+  },
+  show(title,body,tag){
+    if(this.permission!=='granted')return;
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+      navigator.serviceWorker.ready.then(function(reg){
+        reg.showNotification(title,{body:body,icon:'/favicon.ico',badge:'/favicon.ico',tag:tag||'techmeld-'+Date.now(),vibrate:[200,100,200],data:{url:'/'}});
+      });
+    }else{
+      new Notification(title,{body:body,icon:'/favicon.ico',tag:tag||'techmeld'});
+    }
+  },
+  initKnownIds(meldingen){
+    this.knownIds=new Set(meldingen.map(function(m){return m.id}));
+  },
+  checkNew(meldingen,curUserId){
+    var self=this;
+    if(this.knownIds.size===0){this.initKnownIds(meldingen);return}
+    meldingen.forEach(function(m){
+      if(!self.knownIds.has(m.id)&&m.by!==curUserId){
+        self.show('🔔 Nieuwe melding: '+m.title,(m.desc||'').substring(0,80),'mel-'+m.id);
+      }
+    });
+    this.knownIds=new Set(meldingen.map(function(m){return m.id}));
+  }
+};
+
+const sanitize=(obj)=>{
+  if(!obj||typeof obj!=='object')return obj;
+  if(obj.toDate&&typeof obj.toDate==='function')return obj.toDate().toISOString();
+  if(Array.isArray(obj))return obj.map(sanitize);
+  const out={};for(const k of Object.keys(obj))out[k]=sanitize(obj[k]);return out;
+};
+const DB = {
+  // AUTH
+  async register(email, password, name, orgName, orgType) {
+    if(!firebaseReady) return {uid:"demo-"+Date.now(), email, displayName:name};
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    await cred.user.updateProfile({displayName: name});
+    // Super admin — no org, no trial
+    if(SUPER_ADMINS.includes(email)){
+      await db.collection('users').doc(cred.user.uid).set({
+        name, email, role:"superadmin", orgId: null,
+        avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      return cred.user;
+    }
+    // Create organization doc
+    const orgRef = db.collection('organizations').doc();
+    const orgData = {
+      name: orgName, type: orgType,
+      ownerId: cred.user.uid,
+      floors: [
+        {id:"f1",name:"Begane Grond",nr:0},
+        {id:"f2",name:"1e Verdieping",nr:1},
+      ],
+      rooms: [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    await orgRef.set(orgData);
+    // Create user profile doc
+    await db.collection('users').doc(cred.user.uid).set({
+      name, email, role:"admin", orgId: orgRef.id,
+      avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    // Create subscription (free starter + 14-day pro trial)
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + 14);
+    await db.collection('subscriptions').doc(orgRef.id).set({
+      plan:"professional", status:"trial",
+      trialEnd: firebase.firestore.Timestamp.fromDate(trialEnd),
+      orgId: orgRef.id,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return cred.user;
+  },
+
+  async login(email, password) {
+    if(!firebaseReady) return {uid:"demo-"+Date.now(), email, displayName:"Demo"};
+    const cred = await auth.signInWithEmailAndPassword(email, password);
+    return cred.user;
+  },
+
+  async logout() {
+    if(!firebaseReady) return;
+    try{
+      const u=auth.currentUser;
+      if(u){const ts=await db.collection('fcmTokens').where('userId','==',u.uid).get();ts.forEach(function(d){d.ref.delete()})}
+    }catch(e){}
+    await auth.signOut();
+  },
+
+  async saveFCMToken(userId,orgId,token){
+    if(!firebaseReady||!token)return;
+    var id=userId+"_"+btoa(token).slice(0,8);
+    await db.collection('fcmTokens').doc(id).set({userId:userId,orgId:orgId,token:token,device:navigator.userAgent.slice(0,80),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+  },
+
+  async getOrgFCMTokens(orgId,excludeUserId){
+    if(!firebaseReady)return[];
+    var snap=await db.collection('fcmTokens').where('orgId','==',orgId).get();
+    return snap.docs.map(function(d){return d.data()}).filter(function(t){return t.userId!==excludeUserId});
+  },
+
+  // MELDINGEN
+  async addMelding(orgId, melding) {
+    if(!firebaseReady) return melding;
+    const ref = db.collection('organizations').doc(orgId).collection('meldingen').doc();
+    const data = {...melding, id: ref.id, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()};
+    await ref.set(data);
+    return {...melding, id: ref.id};
+  },
+
+  async updateMelding(orgId, melding) {
+    if(!firebaseReady) return;
+    await db.collection('organizations').doc(orgId).collection('meldingen').doc(melding.id).update({
+      ...melding, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  },
+
+  // ORGANIZATION
+  async updateOrg(orgId, data) {
+    if(!firebaseReady) return;
+    await db.collection('organizations').doc(orgId).update(data);
+  },
+
+  // USERS
+  async addUser(orgId, userData) {
+    if(!firebaseReady) return userData;
+    const ref = db.collection('users').doc();
+    await ref.set({...userData, orgId, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+    return {...userData, id: ref.id};
+  },
+
+  async updateUser(userId, data) {
+    if(!firebaseReady) return;
+    await db.collection('users').doc(userId).update(data);
+  },
+
+  async deleteUser(userId) {
+    if(!firebaseReady) return;
+    await db.collection('users').doc(userId).delete();
+  },
+
+  // SUBSCRIPTION
+  async updateSubscription(orgId, data) {
+    if(!firebaseReady) return;
+    await db.collection('subscriptions').doc(orgId).update({
+      ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  },
+
+  // INVOICES
+  async addInvoice(orgId, invoice) {
+    if(!firebaseReady) return invoice;
+    const ref = db.collection('organizations').doc(orgId).collection('invoices').doc();
+    await ref.set({...invoice, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+    return {...invoice, id: ref.id};
+  },
+
+  // REAL-TIME LISTENERS
+  listenMeldingen(orgId, callback) {
+    if(!firebaseReady) return ()=>{};
+    return db.collection('organizations').doc(orgId).collection('meldingen')
+      .orderBy('createdAt','desc')
+      .onSnapshot(snap => {
+        const meldingen = snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
+        callback(meldingen);
+      });
+  },
+
+  listenUsers(orgId, callback) {
+    if(!firebaseReady) return ()=>{};
+    return db.collection('users').where('orgId','==',orgId)
+      .onSnapshot(snap => {
+        const users = snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
+        callback(users);
+      });
+  },
+
+  listenOrg(orgId, callback) {
+    if(!firebaseReady) return ()=>{};
+    return db.collection('organizations').doc(orgId)
+      .onSnapshot(doc => {
+        if(doc.exists) callback(sanitize({id:doc.id, ...doc.data()}));
+      });
+  },
+
+  listenSubscription(orgId, callback) {
+    if(!firebaseReady) return ()=>{};
+    return db.collection('subscriptions').doc(orgId)
+      .onSnapshot(doc => {
+        if(doc.exists) callback(sanitize(doc.data()));
+      });
+  },
+
+  // Get user profile
+  async getUserProfile(uid) {
+    if(!firebaseReady) return null;
+    const doc = await db.collection('users').doc(uid).get();
+    return doc.exists ? sanitize({id:doc.id, ...doc.data()}) : null;
+  },
+
+  // GROEPSLICENTIE
+  async getGroepLocaties(groepId) {
+    if(!firebaseReady) return [];
+    const snap = await db.collection('organizations').where('groepId','==',groepId).get();
+    return snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
+  },
+  async getLocatieMeldingen(orgId) {
+    if(!firebaseReady) return [];
+    const snap = await db.collection('organizations').doc(orgId).collection('meldingen').orderBy('createdAt','desc').get();
+    return snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
+  },
+  async getLocatieUsers(orgId) {
+    if(!firebaseReady) return [];
+    const snap = await db.collection('users').where('orgId','==',orgId).get();
+    return snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
+  },
+  async addLocatie(groepId, name, type) {
+    if(!firebaseReady) return null;
+    const ref = db.collection('organizations').doc();
+    await ref.set({
+      name, type: type||"care", groepId,
+      buildings:[{id:"b1",name:"Hoofdgebouw"}],
+      floors:[{id:"f1",name:"Begane Grond",nr:0,bId:"b1"}],
+      rooms:[],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return {id:ref.id, name, type, groepId};
+  },
+  async setGroepId(orgId, groepId) {
+    if(!firebaseReady) return;
+    await db.collection('organizations').doc(orgId).update({groepId});
+  },
+};
+</script>
+<script type="text/babel">
+const{useState,useEffect,useCallback,useRef}=React;
+const uid=()=>Math.random().toString(36).slice(2,10);
+const ts=()=>new Date().toISOString();
+const fmtDate=d=>new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+const fmtMoney=n=>"€"+n.toFixed(2).replace('.',',');
+
+// ── Theme ──
+const C={bg:"#f8fafc",card:"#ffffff",cardHover:"#f1f5f9",input:"#f8fafc",border:"#e2e8f0",borderFocus:"#2563eb",text:"#1e293b",sub:"#64748b",dim:"#94a3b8",accent:"#2563eb",accentHover:"#1d4ed8",accentBg:"#eff6ff",danger:"#dc2626",success:"#16a34a",warn:"#d97706",sbBg:"#1e293b",sbText:"#e2e8f0",sbDim:"#94a3b8"};
+
+const PRIORITY={low:{l:"Laag",c:"#16a34a",b:"#f0fdf4"},medium:{l:"Middel",c:"#d97706",b:"#fffbeb"},high:{l:"Hoog",c:"#dc2626",b:"#fef2f2"},critical:{l:"Kritiek",c:"#991b1b",b:"#fee2e2"}};
+const STATUS={open:{l:"Open",c:"#2563eb",b:"#eff6ff",i:"○"},in_progress:{l:"In Behandeling",c:"#d97706",b:"#fffbeb",i:"◐"},resolved:{l:"Opgelost",c:"#16a34a",b:"#f0fdf4",i:"●"},closed:{l:"Gesloten",c:"#64748b",b:"#f1f5f9",i:"◆"}};
+const CATS=["Elektriciteit","Sanitair","Verwarming","Ventilatie","Deur/Raam","Vloer/Muur","Lift","Brandveiligheid","Schoonmaak","IT/Netwerk","Meubilair","Anders"];
+const PAGES=[{id:"dashboard",l:"Dashboard"},{id:"meldingen",l:"Meldingen"},{id:"new",l:"Nieuwe melding"},{id:"building",l:"Gebouwen"},{id:"floorplans",l:"Plattegronden"},{id:"users",l:"Gebruikers"},{id:"rapportage",l:"Rapportage"},{id:"groep",l:"Groepsdashboard"},{id:"locaties",l:"Locaties"},{id:"vergelijk",l:"Vergelijking"},{id:"billing",l:"Abonnement"},{id:"settings",l:"Instellingen"}];
+const DEFAULT_PERMS={
+  admin:["dashboard","meldingen","new","building","floorplans","users","rapportage","groep","locaties","vergelijk","billing","settings"],
+  technician:["dashboard","meldingen","new","building","floorplans","rapportage"],
+  reporter:["dashboard","meldingen","new"]
+};
+const PLANS=[
+  {id:"starter",name:"Starter",price:0,yearPrice:0,users:3,buildings:1,free:true,meldingenMax:10,trialDays:14,features:["Tot 3 gebruikers","1 gebouw","Max 10 meldingen","E-mail notificaties","Basis rapportage","14 dagen proefperiode"],color:"#2563eb",pop:false},
+  {id:"professional",name:"Professional",price:89,yearPrice:Math.round(89*12*0.85),users:20,buildings:5,free:false,meldingenMax:999,features:["Tot 20 gebruikers","5 gebouwen","Push + E-mail notificaties","Plattegronden uploaden","Uitgebreide rapportage","Prioriteits support"],color:"#7c3aed",pop:true},
+  {id:"enterprise",name:"Enterprise",price:159,yearPrice:Math.round(159*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,features:["Onbeperkt gebruikers","Onbeperkt gebouwen","Alle functies","24/7 support","Custom integraties","SLA garantie"],color:"#0891b2",pop:false},
+  {id:"groep",name:"Groepslicentie",price:129,yearPrice:Math.round(129*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,perLocatie:true,minLocaties:3,features:["Prijs per locatie","Centraal groepsdashboard","Onbeperkt gebruikers/locatie","Vergelijkende rapportage","Dedicated accountmanager","Volume korting vanaf 5+"],color:"#059669",pop:false,contact:true,volumeKorting:{5:0.10,10:0.15,20:0.20}},
+];
+
+const Icon=({name,size=20,color="currentColor"})=>{
+  const d={
+    dashboard:"M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z",
+    report:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 9h-2v2a1 1 0 1 1-2 0v-2H7a1 1 0 1 1 0-2h2V7a1 1 0 1 1 2 0v2h2a1 1 0 1 1 0 2zm-1-5V3.5L16.5 8H12z",
+    building:"M17 11V3H7v4H3v14h8v-4h2v4h8V11h-4zM7 19H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm4 4H9v-2h2v2zm0-4H9V9h2v2zm0-4H9V5h2v2zm4 8h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm4 12h-2v-2h2v2zm0-4h-2v-2h2v2z",
+    users:"M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z",
+    floor:"M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 12h2v5H7zm4-3h2v8h-2zm4-3h2v11h-2z",
+    notify:"M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z",
+    settings:"M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z",
+    lock:"M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z",
+    logout:"M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z",
+    search:"M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
+    upload:"M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z",
+    close:"M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+    check:"M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+    edit:"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
+    delete:"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+    photo:"M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z",
+    back:"M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+    shield:"M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z",
+    plus:"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
+    card:"M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z",
+    receipt:"M18 17H6v-2h12v2zm0-4H6v-2h12v2zm0-4H6V7h12v2zM3 22l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20z",
+    star:"M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
+    time:"M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z",
+    download:"M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",
+    crown:"M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z",
+    paypal:"M7.076 21.337H2.47a.641.641 0 01-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106z",
+    stats:"M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z",
+    groep:"M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z",
+    locatie:"M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+    vergelijk:"M10 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h5v2h2V1h-2v2zm0 15H5l5-6v6zm4-15v2h5v14h-5v2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-5z",
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d={d[name]||d.dashboard}/></svg>;
+};
+
+// ── Shared UI ──
+const Inp=({label,value,onChange,placeholder,type="text",multi=false,rows=3})=>(
+  <div>{label&&<label style={{fontSize:12,color:C.sub,display:"block",marginBottom:4,fontWeight:600}}>{label}</label>}
+  {multi?<textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+C.border,background:C.card,color:C.text,fontSize:13,outline:"none",resize:"vertical",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=C.border}/>:
+  <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+C.border,background:C.card,color:C.text,fontSize:13,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.borderFocus} onBlur={e=>e.target.style.borderColor=C.border}/>}</div>
+);
+const Sel=({label,value,onChange,options})=>(
+  <div>{label&&<label style={{fontSize:12,color:C.sub,display:"block",marginBottom:4,fontWeight:600}}>{label}</label>}
+  <select value={value} onChange={e=>onChange(e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+C.border,background:C.card,color:C.text,fontSize:13,outline:"none",cursor:"pointer",boxSizing:"border-box"}}>{options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select></div>
+);
+const Btn=({children,onClick,v="primary",sm,disabled,sx={}})=>{
+  const s={fontWeight:600,border:"none",cursor:disabled?"not-allowed":"pointer",borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,opacity:disabled?0.5:1,fontSize:sm?12:13,padding:sm?"6px 12px":"9px 18px",transition:"all .15s"};
+  const vs={primary:{background:C.accent,color:"#fff"},secondary:{background:"#f1f5f9",color:C.text,border:"1px solid "+C.border},danger:{background:"#fef2f2",color:C.danger},ghost:{background:"transparent",color:C.accent},success:{background:"#f0fdf4",color:C.success}};
+  return <button onClick={onClick} disabled={disabled} style={{...s,...vs[v],...sx}}>{children}</button>;
+};
+const Tag=({children,c="#2563eb",bg="#eff6ff"})=><span style={{padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:bg,color:c}}>{children}</span>;
+const Toast=({items,onDismiss})=>items.length?<div style={{position:"fixed",top:12,right:12,zIndex:9999,display:"flex",flexDirection:"column",gap:6,maxWidth:340}}>
+  {items.map(n=><div key={n.id} style={{background:n.type==="success"?"#f0fdf4":n.type==="error"?"#fef2f2":"#eff6ff",border:"1px solid "+(n.type==="success"?"#bbf7d0":n.type==="error"?"#fecaca":"#bfdbfe"),borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,animation:"slideIn .3s",boxShadow:"0 4px 16px rgba(0,0,0,.06)"}}>
+    <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:C.text}}>{n.title}</div>{n.msg&&<div style={{fontSize:11,color:C.sub,marginTop:1}}>{n.msg}</div>}</div>
+    <button onClick={()=>onDismiss(n.id)} style={{background:"none",border:"none",color:C.dim,cursor:"pointer",padding:2}}><Icon name="close" size={14}/></button>
+  </div>)}
+</div>:null;
+
+// ── Data ──
+const mkStore=()=>({
+  org:{id:"org1",name:"Sint-Jozef Ziekenhuis",type:"hospital",
+    buildings:[{id:"b1",name:"Hoofdgebouw"},{id:"b2",name:"Polikliniek"}],
+    floors:[{id:"f0",name:"Kelder",nr:-1,bId:"b1"},{id:"f1",name:"Begane Grond",nr:0,bId:"b1"},{id:"f2",name:"1e Verdieping",nr:1,bId:"b1"},{id:"f3",name:"2e Verdieping",nr:2,bId:"b1"},{id:"f4",name:"3e Verdieping",nr:3,bId:"b1"},{id:"f5",name:"Begane Grond",nr:0,bId:"b2"},{id:"f6",name:"1e Verdieping",nr:1,bId:"b2"}],
+    rooms:[{id:"r1",fId:"f2",name:"Kamer 101",t:"patient"},{id:"r2",fId:"f2",name:"Kamer 102",t:"patient"},{id:"r3",fId:"f2",name:"Kamer 103",t:"patient"},{id:"r4",fId:"f3",name:"Kamer 201",t:"patient"},{id:"r5",fId:"f3",name:"Kamer 202",t:"patient"},{id:"r6",fId:"f1",name:"Receptie",t:"common"},{id:"r7",fId:"f1",name:"Wachtzaal",t:"common"},{id:"r8",fId:"f0",name:"Berging A",t:"storage"},{id:"r9",fId:"f0",name:"Berging B",t:"storage"},{id:"r10",fId:"f0",name:"Technische Ruimte",t:"technical"},{id:"r11",fId:"f4",name:"Operatiezaal 1",t:"special"},{id:"r12",fId:"f4",name:"Operatiezaal 2",t:"special"},{id:"r13",fId:"f5",name:"Wachtzaal Polikliniek",t:"common"},{id:"r14",fId:"f6",name:"Consultatieruimte 1",t:"special"}]},
+  users:[{id:"u1",name:"Jan De Smet",email:"jan@sjzh.be",role:"admin",av:"JD"},{id:"u2",name:"Marie Peeters",email:"marie@sjzh.be",role:"technician",av:"MP"},{id:"u3",name:"Luc Janssens",email:"luc@sjzh.be",role:"reporter",av:"LJ"},{id:"u4",name:"Sophie Maes",email:"sophie@sjzh.be",role:"reporter",av:"SM"}],
+  meldingen:[
+    {id:"m1",title:"Lekkende kraan",desc:"Kraan druppelt constant.",cat:"Sanitair",prio:"medium",status:"open",rId:"r1",fId:"f2",bId:"b1",by:"u3",to:"u2",at:"2026-02-10T08:30:00Z",up:"2026-02-10T08:30:00Z",comments:[{id:"c1",uId:"u2",text:"Ik ga dit vanmiddag bekijken.",at:"2026-02-10T10:15:00Z"}]},
+    {id:"m2",title:"Verlichting defect",desc:"TL-buis flikkert.",cat:"Elektriciteit",prio:"high",status:"in_progress",rId:"r7",fId:"f1",bId:"b1",by:"u4",to:"u2",at:"2026-02-09T14:20:00Z",up:"2026-02-10T09:00:00Z",comments:[{id:"c2",uId:"u2",text:"Nieuwe TL-buis besteld.",at:"2026-02-10T09:00:00Z"}]},
+    {id:"m3",title:"Deur sluit niet",desc:"Deur berging kan niet op slot.",cat:"Deur/Raam",prio:"critical",status:"open",rId:"r8",fId:"f0",bId:"b1",by:"u1",to:null,at:"2026-02-11T07:00:00Z",up:"2026-02-11T07:00:00Z",comments:[]},
+    {id:"m4",title:"Verwarming werkt niet",desc:"Kamer te koud.",cat:"Verwarming",prio:"high",status:"open",rId:"r4",fId:"f3",bId:"b1",by:"u3",to:"u2",at:"2026-02-10T22:45:00Z",up:"2026-02-10T22:45:00Z",comments:[]},
+    {id:"m5",title:"Lift maakt geluid",desc:"Hoofdlift piept bij stoppen.",cat:"Lift",prio:"medium",status:"in_progress",rId:"r6",fId:"f1",bId:"b1",by:"u4",to:"u2",at:"2026-02-08T11:00:00Z",up:"2026-02-09T16:30:00Z",comments:[{id:"c3",uId:"u2",text:"Liftbedrijf komt woensdag.",at:"2026-02-09T16:30:00Z"}]},
+    {id:"m6",title:"WiFi storing",desc:"Geen internet 2e verdieping.",cat:"IT/Netwerk",prio:"critical",status:"resolved",rId:"r2",fId:"f2",bId:"b1",by:"u1",to:"u2",at:"2026-02-07T09:00:00Z",up:"2026-02-07T15:00:00Z",comments:[{id:"c5",uId:"u2",text:"Router gereset.",at:"2026-02-07T15:00:00Z"}]},
+  ],
+  curUser:null,
+  sub:{plan:"professional",status:"trial",trialEnd:new Date(Date.now()+14*864e5).toISOString()},
+  invoices:[{id:"inv-001",date:"2026-02-11",plan:"Professional",amount:89,status:"proef",method:"-"}],
+});
+
+// ═══════════════════════════════════════════
+// TRIAL BANNER
+// ═══════════════════════════════════════════
+const TrialBanner=({sub,onUp})=>{
+  if(sub.status!=="trial")return null;
+  const dl=Math.max(0,Math.ceil((new Date(sub.trialEnd)-new Date())/(864e5)));
+  return <div style={{background:"linear-gradient(135deg,#eff6ff,#f0fdf4)",border:"1px solid #bfdbfe",borderRadius:12,padding:"12px 16px",margin:"0 0 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",animation:"fadeIn .4s"}}>
+    <div style={{width:38,height:38,borderRadius:10,background:"#dbeafe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="time" size={20} color="#2563eb"/></div>
+    <div style={{flex:1,minWidth:180}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>Professional proefperiode — nog {dl} {dl===1?"dag":"dagen"}</div><div style={{fontSize:12,color:C.sub,marginTop:1}}>Probeer alle Professional functies 14 dagen gratis. Daarna kiest u een betaald abonnement om door te gaan.</div></div>
+    <Btn onClick={onUp} sm>Abonnement kiezen</Btn>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// RENEWAL BANNER (shows 7 days before expiration)
+// ═══════════════════════════════════════════
+const RenewalBanner=({sub,onRenew})=>{
+  if(!sub||sub.status==="trial"||!sub.expiresAt||sub.plan==="starter")return null;
+  const now=new Date();
+  const exp=new Date(sub.expiresAt);
+  const daysLeft=Math.ceil((exp-now)/(864e5));
+  if(daysLeft>7||daysLeft<0)return null;
+  const urgent=daysLeft<=3;
+  const plan=PLANS.find(p=>p.id===sub.plan);
+  return <div style={{background:urgent?"linear-gradient(135deg,#fef2f2,#fff7ed)":"linear-gradient(135deg,#fffbeb,#fef3c7)",border:"1px solid "+(urgent?"#fecaca":"#fde68a"),borderRadius:12,padding:"12px 16px",margin:"0 0 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",animation:"fadeIn .4s"}}>
+    <div style={{width:38,height:38,borderRadius:10,background:urgent?"#fee2e2":"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="time" size={20} color={urgent?"#dc2626":"#d97706"}/></div>
+    <div style={{flex:1,minWidth:180}}>
+      <div style={{fontSize:14,fontWeight:700,color:C.text}}>{urgent?"⚠️ ":""}Uw {plan?.name||"abonnement"} verloopt over {daysLeft} {daysLeft===1?"dag":"dagen"}</div>
+      <div style={{fontSize:12,color:C.sub,marginTop:1}}>Verleng uw abonnement om TechMeld te blijven gebruiken. Al uw data blijft bewaard.</div>
+    </div>
+    <Btn onClick={onRenew} sm sx={{background:urgent?"#dc2626":"#d97706"}}>Nu verlengen</Btn>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// SUBSCRIPTION EXPIRED SCREEN
+// ═══════════════════════════════════════════
+const SubExpiredScreen=({sub,onRenew,onLogout})=>{
+  const plan=PLANS.find(p=>p.id===sub?.plan);
+  const expDate=sub?.expiresAt?new Date(sub.expiresAt).toLocaleDateString('nl-BE',{day:'numeric',month:'long',year:'numeric'}):'';
+  return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,padding:20}}>
+    <div style={{background:C.card,borderRadius:20,border:"1px solid "+C.border,padding:"40px 30px",maxWidth:460,textAlign:"center",boxShadow:"0 8px 30px rgba(0,0,0,.06)"}}>
+      <div style={{width:64,height:64,borderRadius:16,background:"linear-gradient(135deg,#fee2e2,#fecaca)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+        <Icon name="time" size={32} color="#dc2626"/>
+      </div>
+      <h2 style={{fontSize:22,fontWeight:800,margin:"0 0 8px"}}>Abonnement verlopen</h2>
+      <p style={{fontSize:14,color:C.sub,lineHeight:1.6,margin:"0 0 6px"}}>Uw {plan?.name||""} abonnement is verlopen{expDate?" op "+expDate:""}.</p>
+      <p style={{fontSize:13,color:C.sub,lineHeight:1.6,margin:"0 0 24px"}}>Verleng uw abonnement om TechMeld te blijven gebruiken. Al uw data en meldingen zijn veilig bewaard.</p>
+      <Btn onClick={onRenew} sx={{padding:"12px 32px",fontSize:15,width:"100%"}}>Abonnement verlengen</Btn>
+      <button onClick={onLogout} style={{marginTop:14,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:12}}>Uitloggen</button>
+    </div>
+  </div>;
+};
+// ═══════════════════════════════════════════
+const Pricing=({sub,onSelect,onBack,onNotify})=>{
+  const[sel,setSel]=useState("professional");
+  const[pay,setPay]=useState("paypal");
+  const[step,setStep]=useState("plans");
+  const[busy,setBusy]=useState(false);
+  const[billing,setBilling]=useState("month"); // month or year
+  const plan=PLANS.find(p=>p.id===sel);
+  const price=billing==="year"?Math.round(plan.yearPrice/12):plan.price;
+  const totalPrice=billing==="year"?plan.yearPrice:plan.price;
+  const period=billing==="year"?"jaar":"maand";
+  const savings=billing==="year"?Math.round(plan.price*12-plan.yearPrice):0;
+
+  const doPay=()=>{
+    if(pay==="paypal"){
+      // Real PayPal redirect
+      const amt=(totalPrice*1.21).toFixed(2);
+      const desc="TechMeld "+plan.name+" - "+(billing==="year"?"jaarabonnement":"maandabonnement");
+      const form=document.createElement("form");form.method="POST";form.action="https://www.paypal.com/cgi-bin/webscr";form.target="_blank";
+      [["cmd","_xclick"],["business","tigrealata@hotmail.com"],["item_name",desc],["amount",amt],["currency_code","EUR"],["return",window.location.href],["cancel_return",window.location.href]].forEach(function(p){var i=document.createElement("input");i.type="hidden";i.name=p[0];i.value=p[1];form.appendChild(i)});
+      document.body.appendChild(form);form.submit();document.body.removeChild(form);
+      setBusy(true);setTimeout(function(){setBusy(false);setStep("confirm_paypal")},1500);
+    }else{
+      // Bank transfer - show invoice
+      setStep("invoice_bank");
+    }
+  };
+
+  // CONFIRM PAYPAL
+  if(step==="confirm_paypal"){
+    return <div style={{padding:"20px 16px",maxWidth:500,margin:"0 auto"}}>
+      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.border,padding:24,textAlign:"center"}}>
+        <Icon name="paypal" size={48} color="#003087"/>
+        <h3 style={{fontSize:18,fontWeight:700,margin:"14px 0 6px"}}>PayPal betaling bevestigen</h3>
+        <p style={{fontSize:13,color:C.sub,marginBottom:20}}>Heeft u de betaling op PayPal afgerond?</p>
+        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+          <Btn onClick={function(){onSelect(sel,"paypal",billing);setStep("invoice");onNotify({title:"Betaling ontvangen!",msg:plan.name+" geactiveerd",type:"success"})}} sx={{padding:"10px 24px"}}>Ja, ik heb betaald</Btn>
+          <Btn onClick={function(){setStep("payment")}} v="secondary" sx={{padding:"10px 24px"}}>Annuleren</Btn>
+        </div>
+      </div>
+    </div>;
+  }
+
+  // INVOICE BANK TRANSFER
+  if(step==="invoice_bank"){
+    var nr="TM-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9999)).padStart(4,"0");
+    var klnr="KL-"+String(Math.floor(Math.random()*9999)).padStart(4,"0");
+    return <div style={{padding:"20px 16px",maxWidth:580,margin:"0 auto"}}>
+      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.border,overflow:"hidden",boxShadow:"0 4px 20px rgba(0,0,0,.04)"}}>
+        <div style={{padding:"24px",borderBottom:"1px solid "+C.border,background:"#f8fafc"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div><div style={{fontSize:22,fontWeight:800,color:C.accent}}>{"TechMeld™"}</div><div style={{fontSize:11,color:C.sub,marginTop:2}}>Technische Dienst Management</div></div>
+            <div style={{textAlign:"right"}}><div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>FACTUUR</div><div style={{fontSize:12,color:C.sub,marginTop:2}}>{nr}</div><div style={{fontSize:11,color:C.dim}}>{new Date().toLocaleDateString("nl-BE")}</div></div>
+          </div>
+        </div>
+        <div style={{padding:"20px 24px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:18,flexWrap:"wrap",gap:12}}>
+            <div>
+              <div style={{fontSize:10,color:C.dim,textTransform:"uppercase",marginBottom:3}}>Van</div>
+              <div style={{fontSize:13,fontWeight:600}}>TechMeld</div>
+              <div style={{fontSize:12,color:C.sub}}>Genk, België</div>
+              <div style={{fontSize:12,color:C.sub}}>BTW: BE0XXX.XXX.XXX</div>
+              <div style={{fontSize:12,color:C.sub}}>info@techmeld.eu</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:10,color:C.dim,textTransform:"uppercase",marginBottom:3}}>Aan</div>
+              <div style={{fontSize:13,fontWeight:600}}>{sub?.orgName||"Uw organisatie"}</div>
+              <div style={{fontSize:12,color:C.sub}}>{"Klantnummer: "+klnr}</div>
+            </div>
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse",marginBottom:16}}>
+            <thead><tr style={{borderBottom:"2px solid "+C.border}}><th style={{textAlign:"left",padding:"6px 0",fontSize:10,color:C.dim,textTransform:"uppercase",fontWeight:600}}>Omschrijving</th><th style={{textAlign:"right",padding:"6px 0",fontSize:10,color:C.dim,textTransform:"uppercase",fontWeight:600}}>Bedrag</th></tr></thead>
+            <tbody>
+              <tr style={{borderBottom:"1px solid "+C.border}}><td style={{padding:"10px 0",fontSize:13}}>{"TechMeld "+plan.name+" — "+(billing==="year"?"jaarabonnement (15% korting)":"maandabonnement")}</td><td style={{padding:"10px 0",textAlign:"right",fontSize:13,fontWeight:600}}>{fmtMoney(totalPrice)}</td></tr>
+              <tr style={{borderBottom:"1px solid "+C.border}}><td style={{padding:"10px 0",fontSize:13,color:C.sub}}>BTW (21%)</td><td style={{padding:"10px 0",textAlign:"right",fontSize:13,color:C.sub}}>{fmtMoney(totalPrice*.21)}</td></tr>
+              <tr><td style={{padding:"10px 0",fontSize:15,fontWeight:800}}>Totaal</td><td style={{padding:"10px 0",textAlign:"right",fontSize:15,fontWeight:800,color:C.accent}}>{fmtMoney(totalPrice*1.21)}</td></tr>
+            </tbody>
+          </table>
+          {/* Bank transfer details */}
+          <div style={{background:"#eff6ff",borderRadius:10,padding:16,border:"1px solid #bfdbfe",marginBottom:14}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.accent,marginBottom:10}}>Betaling via overschrijving</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div><div style={{fontSize:10,color:C.dim}}>IBAN</div><div style={{fontSize:13,fontWeight:600}}>BE05 9531 0129 8075</div></div>
+              <div><div style={{fontSize:10,color:C.dim}}>BIC</div><div style={{fontSize:13,fontWeight:600}}>GEBABEBB</div></div>
+              <div><div style={{fontSize:10,color:C.dim}}>Begunstigde</div><div style={{fontSize:13,fontWeight:600}}>Domenico Sciarrone</div></div>
+              <div><div style={{fontSize:10,color:C.dim}}>Mededeling</div><div style={{fontSize:13,fontWeight:700,color:C.accent}}>{nr}</div></div>
+            </div>
+            <div style={{fontSize:11,color:C.sub,marginTop:10,padding:"8px 0 0",borderTop:"1px solid #bfdbfe"}}>Gelieve het factuurnummer als mededeling te vermelden. Betaling binnen 14 dagen. Uw abonnement wordt geactiveerd na ontvangst van betaling.</div>
+          </div>
+          <div style={{fontSize:10,color:C.dim,lineHeight:1.5,borderTop:"1px solid "+C.border,paddingTop:10}}>
+            <strong>TechMeld</strong> {" — Bijberoep · Genk, België · BTW: BE0XXX.XXX.XXX"}<br/>
+            {"Vragen: factuur@techmeld.eu · © "+new Date().getFullYear()+" TechMeld™"}
+          </div>
+        </div>
+        <div style={{padding:"12px 20px",borderTop:"1px solid "+C.border,display:"flex",gap:8,background:"#f8fafc",flexWrap:"wrap"}}>
+          <Btn onClick={onBack} v="secondary" sm>{"← Dashboard"}</Btn>
+          <Btn onClick={function(){onNotify({title:"Factuur verstuurd per e-mail",type:"success"})}} sm>{"📧 E-mailen"}</Btn>
+          <Btn onClick={function(){onNotify({title:"PDF gedownload",type:"success"})}} v="secondary" sm>{"📥 PDF"}</Btn>
+        </div>
+      </div>
+    </div>;
+  }
+
+  // INVOICE
+  if(step==="invoice"){
+    const nr="TM-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9999)).padStart(4,'0');
+    return <div style={{padding:"20px 16px",maxWidth:580,margin:"0 auto"}}>
+      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.border,overflow:"hidden",boxShadow:"0 4px 20px rgba(0,0,0,.04)"}}>
+        <div style={{padding:"24px",borderBottom:"1px solid "+C.border,background:"#f8fafc"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div><div style={{fontSize:22,fontWeight:800,color:C.accent}}>TechMeld<sup style={{fontSize:9}}>™</sup></div><div style={{fontSize:11,color:C.sub,marginTop:2}}>Technische Dienst Management</div></div>
+            <div style={{textAlign:"right"}}><div style={{fontSize:11,fontWeight:700,color:C.text,textTransform:"uppercase",letterSpacing:".05em"}}>FACTUUR</div><div style={{fontSize:12,color:C.sub,marginTop:2}}>{nr}</div><div style={{fontSize:11,color:C.dim}}>{new Date().toLocaleDateString("nl-BE")}</div></div>
+          </div>
+        </div>
+        <div style={{padding:"20px 24px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:18,flexWrap:"wrap",gap:12}}>
+            <div><div style={{fontSize:10,color:C.dim,textTransform:"uppercase",letterSpacing:".05em",marginBottom:3}}>Van</div><div style={{fontSize:13,fontWeight:600}}>TechMeld</div><div style={{fontSize:12,color:C.sub}}>Genk, België</div><div style={{fontSize:12,color:C.sub}}>Bijberoep: BE0XXX.XXX.XXX</div><div style={{fontSize:12,color:C.sub}}>info@techmeld.eu</div></div>
+            <div style={{textAlign:"right"}}><div style={{fontSize:10,color:C.dim,textTransform:"uppercase",letterSpacing:".05em",marginBottom:3}}>Aan</div><div style={{fontSize:13,fontWeight:600}}>{sub?.orgName||"Uw organisatie"}</div><div style={{fontSize:12,color:C.sub}}>{"Klantnummer: KL-"+String(Math.floor(Math.random()*9999)).padStart(4,"0")}</div></div>
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse",marginBottom:16}}>
+            <thead><tr style={{borderBottom:"2px solid "+C.border}}><th style={{textAlign:"left",padding:"6px 0",fontSize:10,color:C.dim,textTransform:"uppercase",fontWeight:600}}>Omschrijving</th><th style={{textAlign:"right",padding:"6px 0",fontSize:10,color:C.dim,textTransform:"uppercase",fontWeight:600}}>Bedrag</th></tr></thead>
+            <tbody>
+              <tr style={{borderBottom:"1px solid "+C.border}}><td style={{padding:"10px 0",fontSize:13}}>TechMeld {plan.name} — {billing==="year"?"jaarabonnement":"maandabonnement"}{billing==="year"?" (15% korting)":""}</td><td style={{padding:"10px 0",textAlign:"right",fontSize:13,fontWeight:600}}>{fmtMoney(totalPrice)}</td></tr>
+              <tr style={{borderBottom:"1px solid "+C.border}}><td style={{padding:"10px 0",fontSize:13,color:C.sub}}>BTW (21%)</td><td style={{padding:"10px 0",textAlign:"right",fontSize:13,color:C.sub}}>{fmtMoney(totalPrice*.21)}</td></tr>
+              <tr><td style={{padding:"10px 0",fontSize:15,fontWeight:800}}>Totaal</td><td style={{padding:"10px 0",textAlign:"right",fontSize:15,fontWeight:800,color:C.accent}}>{fmtMoney(totalPrice*1.21)}</td></tr>
+            </tbody>
+          </table>
+          <div style={{display:"flex",gap:8,alignItems:"center",padding:"8px 12px",background:"#f0fdf4",borderRadius:6,border:"1px solid #bbf7d0",marginBottom:14}}><Icon name="check" size={16} color="#16a34a"/><span style={{fontSize:12,color:"#16a34a",fontWeight:600}}>Betaald via PayPal</span></div>
+          <div style={{fontSize:10,color:C.dim,lineHeight:1.5,borderTop:"1px solid "+C.border,paddingTop:10}}>
+            <strong>TechMeld</strong>{" — Bijberoep · Genk, België · BTW: BE0XXX.XXX.XXX"}<br/>
+            {"Vragen: factuur@techmeld.eu · © "+new Date().getFullYear()+" TechMeld™"}
+          </div>
+        </div>
+        <div style={{padding:"12px 20px",borderTop:"1px solid "+C.border,display:"flex",gap:8,background:"#f8fafc",flexWrap:"wrap"}}>
+          <Btn onClick={onBack} v="secondary" sm><Icon name="back" size={14}/> Dashboard</Btn>
+          <Btn onClick={function(){onNotify({title:"Factuur verstuurd per e-mail",type:"success"})}} v="success" sm><Icon name="receipt" size={14}/> E-mailen</Btn>
+          <Btn onClick={()=>onNotify({title:"PDF gedownload",type:"success"})} v="secondary" sm><Icon name="download" size={14}/> PDF</Btn>
+        </div>
+      </div>
+    </div>;
+  }
+
+  // PAYMENT
+  if(step==="payment"){
+    return <div style={{padding:"20px 16px",maxWidth:500,margin:"0 auto"}}>
+      <button onClick={()=>setStep("plans")} style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:16,padding:0}}><Icon name="back" size={16} color={C.accent}/> Terug</button>
+      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.border,overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,.04)"}}>
+        <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.border,background:"#f8fafc",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontSize:15,fontWeight:700}}>{plan.name}</div><div style={{fontSize:12,color:C.sub}}>Maandelijks</div></div>
+          <div style={{textAlign:"right"}}><span style={{fontSize:26,fontWeight:800,color:plan.color}}>{fmtMoney(price).replace(',00','')}</span><span style={{fontSize:13,color:C.sub}}>/{billing==="year"?"mnd":"mnd"}</span><div style={{fontSize:10,color:C.dim}}>excl. BTW{billing==="year"?" · jaarlijks gefactureerd":""}</div></div>
+        </div>
+        <div style={{padding:20}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>Betaalmethode</div>
+          <div style={{display:"flex",gap:10,marginBottom:20}}>
+            {[["paypal","PayPal","#003087"],["bank","Overschrijving","#16a34a"]].map(function(item){return <button key={item[0]} onClick={function(){setPay(item[0])}} style={{flex:1,padding:14,borderRadius:10,cursor:"pointer",border:"2px solid "+(pay===item[0]?item[2]:C.border),background:pay===item[0]?item[2]+"08":C.card,display:"flex",flexDirection:"column",alignItems:"center",gap:6,transition:"all .15s"}}>
+                <Icon name={item[0]==="paypal"?"paypal":"card"} size={26} color={pay===item[0]?item[2]:C.dim}/><span style={{fontSize:12,fontWeight:600,color:pay===item[0]?item[2]:C.sub}}>{item[1]}</span>
+              </button>
+            })}
+          </div>
+          {pay==="bank"&&<div style={{padding:14,background:"#f0fdf4",borderRadius:10,border:"1px solid #bbf7d0",marginBottom:16}}>
+            <div style={{fontSize:12,color:"#16a34a",fontWeight:600,marginBottom:4}}>Betaling via overschrijving</div>
+            <div style={{fontSize:11,color:C.sub}}>U ontvangt een factuur met IBAN en betalingsgegevens. Uw abonnement wordt geactiveerd na ontvangst van betaling (binnen 24u).</div>
+          </div>}
+          {pay==="paypal"&&<div style={{padding:14,background:"#fff7ed",borderRadius:10,border:"1px solid #fed7aa",marginBottom:16}}>
+            <div style={{fontSize:12,color:"#ea580c",fontWeight:600,marginBottom:4}}>Betaling via PayPal</div>
+            <div style={{fontSize:11,color:C.sub}}>U wordt doorgestuurd naar PayPal. Ook zonder PayPal-account kunt u betalen met creditcard of bancontact.</div>
+          </div>}
+          <div style={{background:"#f8fafc",borderRadius:8,padding:12,marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:C.sub}}>{plan.name} {billing==="year"?"(jaar, -15%)":"(maand)"}</span><span style={{fontSize:12,fontWeight:600}}>{fmtMoney(totalPrice)}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:C.sub}}>BTW (21%)</span><span style={{fontSize:12}}>{fmtMoney(totalPrice*.21)}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",paddingTop:6,borderTop:"1px solid "+C.border}}><span style={{fontSize:13,fontWeight:700}}>Totaal{billing==="year"?" per jaar":" per maand"}</span><span style={{fontSize:13,fontWeight:800,color:C.accent}}>{fmtMoney(totalPrice*1.21)}</span></div>
+            {billing==="year"&&savings>0&&<div style={{marginTop:6,fontSize:11,color:C.success,fontWeight:600,textAlign:"center"}}>💰 U bespaart {fmtMoney(savings)} per jaar!</div>}
+          </div>
+          <Btn onClick={doPay} disabled={busy} sx={{width:"100%",padding:"11px",fontSize:14}}>{busy?"⟳ Verwerken...":(pay==="paypal"?"Betalen via PayPal "+fmtMoney(totalPrice*1.21):"Factuur genereren")}</Btn>
+          <div style={{display:"flex",alignItems:"center",gap:5,justifyContent:"center",marginTop:10}}><Icon name="lock" size={12} color={C.dim}/><span style={{fontSize:10,color:C.dim}}>SSL beveiligd · Maandelijks opzegbaar · Geen automatische incasso</span></div>
+        </div>
+      </div>
+    </div>;
+  }
+
+  // PLANS
+  const curPlan=PLANS.find(p=>p.id===sub?.plan);
+  const isExpired=sub?.status==="active"&&sub.expiresAt&&new Date(sub.expiresAt)<new Date();
+  const daysUntilExpiry=sub?.expiresAt?Math.ceil((new Date(sub.expiresAt)-new Date())/(864e5)):null;
+  return <div style={{padding:"20px 16px",maxWidth:940,margin:"0 auto"}}>
+    {onBack&&<button onClick={onBack} style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:16,padding:0}}><Icon name="back" size={16} color={C.accent}/> Terug</button>}
+    {/* Current subscription status */}
+    {sub?.status==="active"&&sub.plan!=="starter"&&<div style={{background:isExpired?"#fef2f2":daysUntilExpiry<=7?"#fffbeb":"#f0fdf4",border:"1px solid "+(isExpired?"#fecaca":daysUntilExpiry<=7?"#fde68a":"#bbf7d0"),borderRadius:12,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{width:36,height:36,borderRadius:10,background:isExpired?"#fee2e2":daysUntilExpiry<=7?"#fef3c7":"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Icon name={isExpired?"time":"crown"} size={18} color={isExpired?"#dc2626":daysUntilExpiry<=7?"#d97706":"#16a34a"}/>
+      </div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13,fontWeight:700,color:C.text}}>{isExpired?"⚠️ Abonnement verlopen":"Huidig abonnement: "+curPlan?.name}</div>
+        <div style={{fontSize:11,color:C.sub,marginTop:2}}>{isExpired?"Verleng uw abonnement om door te gaan":sub.expiresAt?"Geldig tot: "+new Date(sub.expiresAt).toLocaleDateString('nl-BE',{day:'numeric',month:'long',year:'numeric'})+(sub.billing==="year"?" (jaarabonnement)":" (maandabonnement)"):""}</div>
+      </div>
+    </div>}
+    <div style={{textAlign:"center",marginBottom:28}}><h1 style={{fontSize:26,fontWeight:800,margin:"0 0 6px"}}>Kies uw abonnement</h1><p style={{fontSize:13,color:C.sub}}>14 dagen gratis proberen · Daarna betaald abonnement · Maandelijks opzegbaar</p>
+      {/* Billing toggle */}
+      <div style={{display:"inline-flex",alignItems:"center",gap:10,marginTop:16,padding:"4px",background:"#f1f5f9",borderRadius:10}}>
+        <button onClick={()=>setBilling("month")} style={{padding:"8px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:billing==="month"?C.accent:"transparent",color:billing==="month"?"#fff":C.sub,transition:"all .15s"}}>Maandelijks</button>
+        <button onClick={()=>setBilling("year")} style={{padding:"8px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:billing==="year"?"#16a34a":"transparent",color:billing==="year"?"#fff":C.sub,transition:"all .15s",position:"relative"}}>
+          Jaarlijks
+          <span style={{position:"absolute",top:-8,right:-12,background:"#f59e0b",color:"#fff",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:8,whiteSpace:"nowrap"}}>-15%</span>
+        </button>
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14,marginBottom:28}}>
+      {PLANS.map(p=>{const mp=billing==="year"?Math.round(p.yearPrice/12):p.price;const sv=billing==="year"?Math.round(p.price*12-p.yearPrice):0;return <div key={p.id} onClick={()=>setSel(p.id)} style={{background:C.card,borderRadius:14,padding:"20px 16px",cursor:"pointer",border:"2px solid "+(sel===p.id?p.color:C.border),boxShadow:sel===p.id?"0 8px 24px "+p.color+"12":"0 1px 4px rgba(0,0,0,.04)",transition:"all .2s",position:"relative"}}>
+        {p.pop&&<div style={{position:"absolute",top:-9,right:14,background:p.color,color:"#fff",padding:"3px 10px",borderRadius:16,fontSize:10,fontWeight:700}}>Meest gekozen</div>}
+        <div style={{fontSize:11,fontWeight:700,color:p.color,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>{p.name}</div>
+        <div style={{marginBottom:14}}>
+          {p.free?<><span style={{fontSize:32,fontWeight:800}}>Gratis</span><div style={{fontSize:10,color:C.dim}}>14 dagen gratis · max {p.users} gebruikers</div></>
+          :<><span style={{fontSize:32,fontWeight:800}}>{fmtMoney(mp).replace(',00','')}</span><span style={{fontSize:12,color:C.sub}}>/{p.perLocatie?"locatie/mnd":"mnd"}</span>
+          <div style={{fontSize:10,color:C.dim}}>excl. 21% BTW{billing==="year"?" · jaarlijks gefactureerd":""}{p.perLocatie?" · min. "+p.minLocaties+" locaties":""}</div>
+          {billing==="year"&&sv>0&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600,marginTop:3}}>💰 Bespaar {fmtMoney(sv)}/jaar{p.perLocatie?" per locatie":""}</div>}
+          {billing==="year"&&<div style={{fontSize:10,color:C.dim,textDecoration:"line-through",marginTop:1}}>{fmtMoney(p.price)}/mnd normaal</div>}</>}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>{p.features.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5}}><Icon name="check" size={13} color={p.color}/><span style={{fontSize:11}}>{f}</span></div>)}</div>
+        <div style={{marginTop:14,padding:"7px",borderRadius:6,textAlign:"center",fontSize:11,fontWeight:600,background:sel===p.id?p.color:"#f1f5f9",color:sel===p.id?"#fff":C.sub,transition:"all .2s"}}>{sel===p.id?"✓ Geselecteerd":"Selecteren"}</div>
+      </div>})}
+    </div>
+    <div style={{textAlign:"center"}}>{plan.free?<Btn onClick={()=>{onSelect(sel,"free","month");onNotify({title:"Proefperiode gestart!",msg:"14 dagen gratis · daarna betaald abonnement",type:"success"})}} sx={{padding:"11px 32px",fontSize:14}}>14 dagen gratis proberen</Btn>:plan.contact?<Btn onClick={()=>{window.location.href="mailto:info@techmeld.eu?subject=Groepslicentie%20aanvraag&body=Beste%20TechMeld%2C%0A%0AWij%20zijn%20ge%C3%AFnteresseerd%20in%20de%20Groepslicentie%20voor%20meerdere%20locaties.%0A%0AOrganisatie%3A%20%0AAantal%20locaties%3A%20%0A%0AMet%20vriendelijke%20groet";onNotify({title:"E-mail opent...",msg:"Stuur ons uw gegevens en wij maken een offerte op maat",type:"info"})}} sx={{padding:"11px 32px",fontSize:14,background:"#059669"}}>Offerte aanvragen</Btn>:<Btn onClick={()=>setStep("payment")} sx={{padding:"11px 32px",fontSize:14}}>{isExpired?"Abonnement verlengen":"Doorgaan naar betaling"}</Btn>}</div>
+    <div style={{textAlign:"center",marginTop:16,fontSize:11,color:C.dim}}>{plan.free?"Geen betaalgegevens nodig":plan.contact?"Wij maken een offerte op maat voor uw organisatie":"PayPal of Creditcard · Factuur per e-mail · Maandelijks opzegbaar"}</div>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// SIDEBAR (dark)
+// ═══════════════════════════════════════════
+const Sidebar=({active,onNav,user,onLogout,sub})=>{
+  var isSA=SUPER_ADMINS.includes(user?.email);
+  var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.admin;
+  const isGroep=sub?.plan==="groep";
+  const items=isSA?[{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]:[{id:"dashboard",ic:"dashboard",l:"Dashboard"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuwe Melding"},{id:"building",ic:"building",l:"Gebouwen"},{id:"floorplans",ic:"floor",l:"Plattegronden"},{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)});
+  if(!isSA&&SUPER_ADMINS.includes(user?.email))items.push({id:"admin",ic:"shield",l:"⚡ Admin"});
+  const pl=PLANS.find(p=>p.id===sub?.plan);
+  return <div className="desktop-sidebar" style={{width:230,height:"100%",background:C.sbBg,display:"flex",flexDirection:"column",flexShrink:0,overflow:"auto"}}>
+    <div style={{padding:"16px 14px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid rgba(255,255,255,.06)"}}>
+      <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#2563eb,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="shield" size={16} color="white"/></div>
+      <div style={{fontSize:16,fontWeight:700,color:C.sbText}}>TechMeld<sup style={{fontSize:7,color:"#60a5fa"}}>™</sup></div>
+    </div>
+    <nav style={{flex:1,padding:"6px"}}>
+      {items.map(it=><button key={it.id} onClick={()=>onNav(it.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:7,border:"none",cursor:"pointer",marginBottom:1,background:active===it.id?"rgba(255,255,255,.08)":"transparent",color:active===it.id?"#fff":C.sbDim,fontSize:13,fontWeight:active===it.id?600:400,textAlign:"left",transition:"all .1s"}}><Icon name={it.ic} size={16} color={active===it.id?"#60a5fa":C.sbDim}/>{it.l}</button>)}
+    </nav>
+    {pl&&!isSA&&<div style={{margin:"0 8px 6px",padding:"6px 10px",background:"rgba(255,255,255,.04)",borderRadius:6,border:"1px solid rgba(255,255,255,.06)",cursor:"pointer"}} onClick={()=>onNav("billing")}>
+      <div style={{display:"flex",alignItems:"center",gap:5}}><Icon name={sub.status==="trial"?"time":"crown"} size={12} color={pl.color}/><span style={{fontSize:10,fontWeight:600,color:pl.color}}>{pl.name}{sub.status==="trial"?" (Proef)":""}</span></div>
+      {sub.status==="active"&&sub.expiresAt&&(()=>{const dl=Math.ceil((new Date(sub.expiresAt)-new Date())/(864e5));return dl<=7?<div style={{fontSize:9,color:dl<=3?"#fca5a5":"#fde68a",marginTop:2}}>{dl<=0?"Verlopen!":"Verloopt over "+dl+" "+(dl===1?"dag":"dagen")}</div>:null})()}
+    </div>}
+    <div style={{padding:"8px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
+        <div style={{width:28,height:28,borderRadius:7,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"white"}}>{user.av}</div>
+        <div><div style={{fontSize:11,fontWeight:600,color:C.sbText}}>{user.name}</div><div style={{fontSize:9,color:isSA?"#60a5fa":C.sbDim}}>{isSA?"⚡ Super Admin":user.role}</div></div>
+      </div>
+      <button onClick={onLogout} style={{width:"100%",display:"flex",alignItems:"center",gap:5,padding:"5px 8px",borderRadius:5,border:"none",cursor:"pointer",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:11}}><Icon name="logout" size={13} color="#f87171"/> Uitloggen</button>
+      <div style={{marginTop:6,textAlign:"center",fontSize:7,color:"rgba(255,255,255,.15)"}}>© {new Date().getFullYear()} TechMeld™</div>
+    </div>
+  </div>;
+};
+
+const MobileNav=({active,onNav,user,onLogout,sub})=>{
+  const[showMenu,setShowMenu]=useState(false);
+  var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.admin;
+  const isGroep=sub?.plan==="groep";
+  const items=[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}].filter(function(it){return it.id==="menu"||userPerms.includes(it.id)});
+  var menuItems=[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(SUPER_ADMINS.includes(user?.email)?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
+  return <><div className="mobile-nav">{items.map(it=><button key={it.id} onClick={function(){if(it.id==="menu")setShowMenu(!showMenu);else{setShowMenu(false);onNav(it.id)}}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"5px 2px",border:"none",cursor:"pointer",borderRadius:6,background:"transparent",color:(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}}>
+    {it.id==="new"?<div style={{width:38,height:38,borderRadius:19,marginTop:-16,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(37,99,235,.3)"}}><Icon name="plus" size={22} color="white"/></div>:<Icon name={it.ic} size={18} color={(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}/>}
+    <span style={{fontSize:9,fontWeight:(active===it.id||(it.id==="menu"&&showMenu))?600:400}}>{it.l}</span>
+  </button>)}</div>
+  {showMenu&&<div style={{position:"fixed",bottom:60,left:0,right:0,zIndex:998,padding:"8px 12px",paddingBottom:"calc(8px + env(safe-area-inset-bottom))"}}>
+    <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.border,boxShadow:"0 -4px 20px rgba(0,0,0,.1)",overflow:"hidden"}}>
+      <div style={{padding:"12px 14px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8}}>
+        <div style={{width:28,height:28,borderRadius:7,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"white"}}>{user?.av||"U"}</div>
+        <div><div style={{fontSize:12,fontWeight:600}}>{user?.name||"Gebruiker"}</div><div style={{fontSize:10,color:C.dim}}>{user?.role||""}</div></div>
+      </div>
+      {menuItems.map(function(it){return <button key={it.id} onClick={function(){setShowMenu(false);onNav(it.id)}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 14px",border:"none",cursor:"pointer",background:active===it.id?"#f1f5f9":"transparent",color:C.text,fontSize:13,borderBottom:"1px solid "+C.border}}>
+        <Icon name={it.ic} size={16} color={active===it.id?C.accent:C.dim}/>{it.l}
+      </button>})}
+      <button onClick={function(){setShowMenu(false);onLogout()}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 14px",border:"none",cursor:"pointer",background:"#fef2f2",color:"#dc2626",fontSize:13,fontWeight:600}}>
+        <Icon name="logout" size={16} color="#dc2626"/> Uitloggen
+      </button>
+    </div>
+  </div>}
+  </>
+};
+
+// ═══════════════════════════════════════════
+// PAGES
+// ═══════════════════════════════════════════
+const Dashboard=({mel,org,onNav,sub,onUp})=>{
+  const s={tot:mel.length,open:mel.filter(m=>m.status==="open").length,prog:mel.filter(m=>m.status==="in_progress").length,done:mel.filter(m=>m.status==="resolved").length,crit:mel.filter(m=>m.prio==="critical"&&m.status!=="resolved"&&m.status!=="closed").length};
+  const rec=[...mel].sort((a,b)=>new Date(b.at)-new Date(a.at)).slice(0,5);
+  return <div style={{padding:"20px 16px",maxWidth:1100}}>
+    <TrialBanner sub={sub} onUp={onUp}/>
+    <RenewalBanner sub={sub} onRenew={onUp}/>
+    <div style={{marginBottom:20}}><h1 style={{fontSize:24,fontWeight:800,margin:0}}>Dashboard</h1><p style={{fontSize:13,color:C.sub,marginTop:2}}>{org.name}</p></div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:20}}>
+      {[{l:"Totaal",v:s.tot,c:C.accent},{l:"Open",v:s.open,c:"#2563eb"},{l:"In Behandeling",v:s.prog,c:"#d97706"},{l:"Opgelost",v:s.done,c:"#16a34a"},{l:"Kritiek",v:s.crit,c:"#dc2626"}].map((x,i)=>
+        <div key={i} style={{background:C.card,borderRadius:12,padding:14,border:"1px solid "+C.border,boxShadow:"0 1px 2px rgba(0,0,0,.03)"}}>
+          <div style={{fontSize:10,color:C.dim,fontWeight:600,textTransform:"uppercase",letterSpacing:".04em",marginBottom:4}}>{x.l}</div>
+          <div style={{fontSize:28,color:x.c,fontWeight:800}}>{x.v}</div>
+        </div>
+      )}
+    </div>
+    <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,overflow:"hidden",boxShadow:"0 1px 2px rgba(0,0,0,.03)"}}>
+      <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <h3 style={{fontSize:14,fontWeight:700,margin:0}}>Recente Meldingen</h3>
+        <button onClick={()=>onNav("meldingen")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:600}}>Alles →</button>
+      </div>
+      {rec.map(m=>{const room=org.rooms.find(r=>r.id===m.rId);return <div key={m.id} onClick={()=>onNav("detail",m.id)} style={{padding:"10px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10,cursor:"pointer",transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=C.cardHover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+        <div style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:PRIORITY[m.prio]?.c}}/>
+        <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.title}</div><div style={{fontSize:11,color:C.dim,marginTop:1}}>{room?.name}</div></div>
+        <Tag c={STATUS[m.status]?.c} bg={STATUS[m.status]?.b}>{STATUS[m.status]?.l}</Tag>
+      </div>})}
+    </div>
+    {PushNotify.permission==='granted'?
+      <div style={{marginTop:12,padding:"10px 14px",background:C.accentBg,borderRadius:8,border:"1px solid #bfdbfe",display:"flex",alignItems:"center",gap:8}}>
+        <Icon name="notify" size={16} color={C.accent}/><span style={{fontSize:12,color:C.sub}}>Push notificaties actief — meldingen worden direct verstuurd.</span>
+      </div>
+    :PushNotify.supported?
+      <div style={{marginTop:12,padding:"10px 14px",background:"#fffbeb",borderRadius:8,border:"1px solid #fde68a",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <Icon name="notify" size={16} color="#d97706"/><span style={{fontSize:12,color:"#92400e",flex:1}}>Push notificaties zijn niet actief.</span>
+        <button onClick={function(){PushNotify.registerAndSave(window.__tmUserId||"",window.__tmOrgId||"").then(function(){window.location.reload()})}} style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#d97706",color:"white",fontSize:11,fontWeight:600,cursor:"pointer"}}>Inschakelen</button>
+      </div>
+    :null}
+  </div>;
+};
+
+const MeldingenList=({mel,org,onNav,sub})=>{
+  const[fs,setFs]=useState("all");const[q,setQ]=useState("");
+  const plan=PLANS.find(p=>p.id===(sub?.plan||"starter"))||PLANS[0];
+  const activeMel=mel.filter(m=>m.status!=="closed").length;
+  const atLimit=plan.meldingenMax<999&&activeMel>=plan.meldingenMax;
+  const list=mel.filter(m=>{if(fs!=="all"&&m.status!==fs)return false;if(q&&!m.title.toLowerCase().includes(q.toLowerCase()))return false;return true}).sort((a,b)=>new Date(b.at)-new Date(a.at));
+  return <div style={{padding:"20px 16px",maxWidth:1100}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+      <div><h1 style={{fontSize:24,fontWeight:800,margin:0}}>Meldingen</h1>{plan.meldingenMax<999&&<p style={{fontSize:12,color:atLimit?"#dc2626":C.dim,marginTop:1}}>{activeMel}/{plan.meldingenMax} actieve meldingen</p>}</div>
+      <Btn onClick={()=>onNav("new")}>+ Nieuw</Btn>
+    </div>
+    <div style={{marginBottom:14,display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{position:"relative"}}><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Zoeken..." style={{width:"100%",padding:"9px 12px 9px 34px",borderRadius:8,border:"1px solid "+C.border,background:C.card,color:C.text,fontSize:13,outline:"none",boxSizing:"border-box"}}/><div style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)"}}><Icon name="search" size={14} color={C.dim}/></div></div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{[["all","Alle"],["open","Open"],["in_progress","In Behandeling"],["resolved","Opgelost"]].map(([k,l])=><Btn key={k} onClick={()=>setFs(k)} v={fs===k?"primary":"secondary"} sm>{l}</Btn>)}</div>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {list.map(m=>{const room=org.rooms.find(r=>r.id===m.rId);const fl=org.floors.find(f=>f.id===m.fId);const bld=(org.buildings||[]).find(b=>b.id===(m.bId||(fl&&fl.bId)));return <div key={m.id} onClick={()=>onNav("detail",m.id)} style={{background:C.card,borderRadius:10,padding:"12px 14px",border:"1px solid "+C.border,cursor:"pointer",display:"flex",alignItems:"center",gap:10,borderLeft:"3px solid "+PRIORITY[m.prio]?.c,transition:"all .1s",boxShadow:"0 1px 2px rgba(0,0,0,.02)"}} onMouseEnter={e=>e.currentTarget.style.background=C.cardHover} onMouseLeave={e=>e.currentTarget.style.background=C.card}>
+        <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600}}>{m.title}</div><div style={{fontSize:11,color:C.dim,marginTop:1}}>📍 {bld&&(org.buildings||[]).length>1?bld.name+" · ":""}{room?.name} · {m.cat} {m.comments.length>0&&`· 💬 ${m.comments.length}`}</div></div>
+        <Tag c={PRIORITY[m.prio]?.c} bg={PRIORITY[m.prio]?.b}>{PRIORITY[m.prio]?.l}</Tag>
+        <Tag c={STATUS[m.status]?.c} bg={STATUS[m.status]?.b}>{STATUS[m.status]?.l}</Tag>
+      </div>})}
+      {!list.length&&<div style={{textAlign:"center",padding:40,color:C.dim}}>📋 Geen meldingen</div>}
+    </div>
+  </div>;
+};
+
+const Detail=({mel,org,users,cur,onBack,onUpdate,onNotify})=>{
+  const[cmt,setCmt]=useState("");const[editing,setEditing]=useState(false);const[lightbox,setLightbox]=useState(null);
+  const[ed,setEd]=useState({status:mel.status,prio:mel.prio,to:mel.to||""});
+  const room=org.rooms.find(r=>r.id===mel.rId);const floor=org.floors.find(f=>f.id===mel.fId);const building=(org.buildings||[]).find(b=>b.id===(mel.bId||(floor&&floor.bId)));const rep=users.find(u=>u.id===mel.by);const assigned=users.find(u=>u.id===mel.to);
+  const addC=()=>{if(!cmt.trim())return;onUpdate({...mel,comments:[...mel.comments,{id:uid(),uId:cur.id,text:cmt,at:ts()}],up:ts()});setCmt("");onNotify({title:"Reactie toegevoegd",type:"success"})};
+  const save=()=>{onUpdate({...mel,...ed,up:ts()});setEditing(false);onNotify({title:"Bijgewerkt",type:"success"})};
+  const quickStatus=(s)=>{
+    const labels={in_progress:"In behandeling genomen",resolved:"Als opgelost gemarkeerd",closed:"Gesloten"};
+    const update={...mel,status:s,up:ts()};
+    if(s==="resolved")update.resolvedAt=ts();
+    if(s==="in_progress"&&!mel.to)update.to=cur.id;
+    onUpdate(update);onNotify({title:labels[s]||"Status gewijzigd",type:"success"});
+  };
+  return <>{lightbox&&<div onClick={function(){setLightbox(null)}} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20,cursor:"zoom-out"}}>
+    <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"90vh",borderRadius:8,objectFit:"contain",boxShadow:"0 8px 40px rgba(0,0,0,.5)"}}/>
+    <button onClick={function(e){e.stopPropagation();setLightbox(null)}} style={{position:"absolute",top:16,right:16,width:40,height:40,borderRadius:20,background:"rgba(255,255,255,.2)",border:"none",cursor:"pointer",fontSize:20,color:"white"}}>✕</button>
+  </div>}
+  <div style={{padding:"20px 16px",maxWidth:780}}>
+    <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:14,padding:0}}><Icon name="back" size={16} color={C.accent}/> Terug</button>
+    <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,overflow:"hidden",boxShadow:"0 2px 6px rgba(0,0,0,.03)"}}>
+      <div style={{padding:"16px",borderBottom:"1px solid "+C.border}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:10}}>
+          <h2 style={{fontSize:20,fontWeight:800,margin:0}}>{mel.title}</h2>
+          <Btn onClick={()=>setEditing(!editing)} v="secondary" sm>{editing?"Annuleren":"Bewerken"}</Btn>
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <Tag c={STATUS[mel.status]?.c} bg={STATUS[mel.status]?.b}>{STATUS[mel.status]?.i} {STATUS[mel.status]?.l}</Tag>
+          <Tag c={PRIORITY[mel.prio]?.c} bg={PRIORITY[mel.prio]?.b}>{PRIORITY[mel.prio]?.l}</Tag>
+          <Tag c="#7c3aed" bg="#f5f3ff">{mel.cat}</Tag>
+          {assigned&&<Tag c="#0891b2" bg="#ecfeff">{"→ "+assigned.name}</Tag>}
+        </div>
+        {mel.status!=="resolved"&&mel.status!=="closed"&&<div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+          {mel.status==="open"&&<Btn onClick={()=>quickStatus("in_progress")} sm v="secondary">{"🔧 In behandeling nemen"}</Btn>}
+          <Btn onClick={()=>quickStatus("resolved")} sm sx={{background:"#16a34a"}}>{"✅ Opgelost"}</Btn>
+        </div>}
+        {mel.status==="resolved"&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:12,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,border:"1px solid #bbf7d0"}}>
+          <span style={{fontSize:12,fontWeight:600,color:"#16a34a"}}>{"Opgelost op "+(mel.resolvedAt?fmtDate(mel.resolvedAt):fmtDate(mel.up))}</span>
+          <Btn onClick={()=>quickStatus("closed")} sm v="secondary" sx={{marginLeft:"auto",fontSize:10}}>Sluiten</Btn>
+        </div>}
+      </div>
+      {editing&&<div style={{padding:14,background:"#f8fafc",borderBottom:"1px solid "+C.border}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <Sel label="Status" value={ed.status} onChange={v=>setEd({...ed,status:v})} options={Object.entries(STATUS).map(([k,v])=>({v:k,l:v.l}))}/>
+          <Sel label="Prioriteit" value={ed.prio} onChange={v=>setEd({...ed,prio:v})} options={Object.entries(PRIORITY).map(([k,v])=>({v:k,l:v.l}))}/>
+        </div>
+        <Sel label="Toegewezen" value={ed.to} onChange={v=>setEd({...ed,to:v})} options={[{v:"",l:"Niet toegewezen"},...users.filter(u=>u.role!=="reporter").map(u=>({v:u.id,l:u.name}))]}/>
+        <div style={{marginTop:10}}><Btn onClick={save} sm>Opslaan</Btn></div>
+      </div>}
+      <div style={{padding:14,borderBottom:"1px solid "+C.border}}><p style={{fontSize:13,lineHeight:1.7}}>{mel.desc}</p>
+        {mel.photos&&mel.photos.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+          {mel.photos.map(function(p,i){return <div key={p.id||i} style={{width:80,height:80,borderRadius:8,overflow:"hidden",border:"1px solid "+C.border,cursor:"pointer"}} onClick={function(){setLightbox(p.url)}}><img src={p.url} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>})}
+        </div>}
+      </div>
+      <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,display:"flex",gap:16,flexWrap:"wrap"}}>
+        <div><div style={{fontSize:10,color:C.dim,textTransform:"uppercase"}}>Locatie</div><div style={{fontSize:13,fontWeight:600,marginTop:1}}>📍 {room?.name}</div></div>
+        <div><div style={{fontSize:10,color:C.dim,textTransform:"uppercase"}}>Gebouw / Verdieping</div><div style={{fontSize:13,fontWeight:600,marginTop:1}}>🏢 {building?building.name+" · ":""}{floor?.name}</div></div>
+        <div><div style={{fontSize:10,color:C.dim,textTransform:"uppercase"}}>Melder</div><div style={{fontSize:13,fontWeight:600,marginTop:1}}>👤 {rep?.name}</div></div>
+      </div>
+      <div style={{padding:14}}>
+        <h4 style={{fontSize:11,fontWeight:700,color:C.sub,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:".04em"}}>Reacties ({mel.comments.length})</h4>
+        {mel.comments.map(c=>{const a=users.find(u=>u.id===c.uId);return <div key={c.id} style={{display:"flex",gap:8,marginBottom:10}}>
+          <div style={{width:26,height:26,borderRadius:6,flexShrink:0,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"white"}}>{a?.av}</div>
+          <div><div style={{display:"flex",gap:5,alignItems:"baseline"}}><span style={{fontSize:12,fontWeight:600}}>{a?.name}</span><span style={{fontSize:10,color:C.dim}}>{fmtDate(c.at)}</span></div><p style={{fontSize:12,color:C.sub,margin:"2px 0 0",lineHeight:1.5}}>{c.text}</p></div>
+        </div>})}
+        <div style={{display:"flex",gap:6,marginTop:10}}>
+          <input value={cmt} onChange={e=>setCmt(e.target.value)} placeholder="Reactie..." onKeyDown={e=>e.key==="Enter"&&addC()} style={{flex:1,padding:"8px 10px",borderRadius:6,border:"1px solid "+C.border,background:C.card,fontSize:12,outline:"none"}}/>
+          <Btn onClick={addC} sm>Verstuur</Btn>
+        </div>
+      </div>
+    </div>
+  </div></>;
+};
+
+const NewMeld=({org,users,cur,onSubmit,onNav,onNotify,sub})=>{
+  const buildings=org.buildings||[{id:"b_default",name:"Gebouw"}];
+  const plan=PLANS.find(p=>p.id===(sub?.plan||"starter"))||PLANS[0];
+  const[f,setF]=useState({title:"",desc:"",cat:CATS[0],prio:"medium",bId:buildings[0]?.id||"",fId:"",rId:"",to:""});
+  const[photos,setPhotos]=useState([]);
+  const fileRef=useRef(null);
+  const bFloors=org.floors.filter(fl=>fl.bId===f.bId);
+  const fId=f.fId||bFloors[0]?.id||"";
+  const rooms=org.rooms.filter(r=>r.fId===fId);
+  const addPhotos=(e)=>{
+    const files=Array.from(e.target.files||[]);
+    if(photos.length+files.length>5){onNotify({title:"Max 5 foto's",type:"error"});return}
+    files.forEach(file=>{
+      if(!file.type.startsWith('image/')){return}
+      if(file.size>10*1024*1024){onNotify({title:"Bestand te groot (max 10MB)",type:"error"});return}
+      const reader=new FileReader();
+      reader.onload=(ev)=>{setPhotos(p=>[...p,{id:uid(),name:file.name,size:file.size,url:ev.target.result,file}])};
+      reader.readAsDataURL(file);
+    });
+    e.target.value="";
+  };
+  const rmPhoto=(id)=>setPhotos(p=>p.filter(x=>x.id!==id));
+  const go=()=>{if(!f.title||!f.rId){onNotify({title:"Vul titel en locatie in",type:"error"});return}const usedFId=f.fId||bFloors[0]?.id||"";onSubmit({id:uid(),...f,fId:usedFId,bId:f.bId,status:"open",by:cur.id,to:f.to||null,at:ts(),up:ts(),comments:[],photos:photos.map(p=>({id:p.id,name:p.name,url:p.url}))});onNotify({title:"Melding aangemaakt!",msg:'"'+f.title+'"'+(photos.length?" met "+photos.length+" foto('s)":""),type:"success"});onNav("meldingen")};
+  return <div style={{padding:"20px 16px",maxWidth:600}}>
+    <h1 style={{fontSize:24,fontWeight:800,margin:"0 0 14px"}}>Nieuwe Melding</h1>
+    <div style={{background:C.card,borderRadius:12,padding:18,border:"1px solid "+C.border,display:"flex",flexDirection:"column",gap:14,boxShadow:"0 1px 4px rgba(0,0,0,.03)"}}>
+      <Inp label="Titel *" value={f.title} onChange={v=>setF({...f,title:v})} placeholder="bijv. Lekkende kraan"/>
+      <Inp label="Beschrijving" value={f.desc} onChange={v=>setF({...f,desc:v})} placeholder="Beschrijf het probleem..." multi rows={3}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Sel label="Categorie" value={f.cat} onChange={v=>setF({...f,cat:v})} options={CATS.map(c=>({v:c,l:c}))}/>
+        <Sel label="Prioriteit" value={f.prio} onChange={v=>setF({...f,prio:v})} options={Object.entries(PRIORITY).map(([k,v])=>({v:k,l:v.l}))}/>
+      </div>
+      {buildings.length>1&&<Sel label="Gebouw *" value={f.bId} onChange={v=>setF({...f,bId:v,fId:"",rId:""})} options={buildings.map(b=>({v:b.id,l:b.name}))}/>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Sel label="Verdieping *" value={fId} onChange={v=>setF({...f,fId:v,rId:""})} options={bFloors.map(fl=>({v:fl.id,l:fl.name}))}/>
+        <Sel label="Ruimte *" value={f.rId} onChange={v=>setF({...f,rId:v})} options={[{v:"",l:"-- Kies --"},...rooms.map(r=>({v:r.id,l:r.name}))]}/>
+      </div>
+      <Sel label="Toewijzen aan" value={f.to} onChange={v=>setF({...f,to:v})} options={[{v:"",l:"-- Niemand (alle technici ontvangen melding) --"},...users.filter(u=>u.role==="technician"||u.role==="admin").map(u=>({v:u.id,l:u.name+" ("+({admin:"Beheerder",technician:"Technicus"}[u.role]||u.role)+")"}))]}/>
+      <div>
+        <label style={{fontSize:12,color:C.sub,display:"block",marginBottom:4,fontWeight:600}}>Foto's ({photos.length}/5)</label>
+        <input ref={fileRef} type="file" accept="image/*" multiple onChange={addPhotos} style={{display:"none"}}/>
+        {photos.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+          {photos.map(p=><div key={p.id} style={{position:"relative",width:72,height:72,borderRadius:8,overflow:"hidden",border:"1px solid "+C.border}}>
+            <img src={p.url} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+            <button onClick={()=>rmPhoto(p.id)} style={{position:"absolute",top:2,right:2,width:20,height:20,borderRadius:10,background:"rgba(0,0,0,.6)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="close" size={10} color="white"/></button>
+          </div>)}
+        </div>}
+        {photos.length<5&&<div onClick={()=>fileRef.current?.click()} style={{border:"2px dashed "+C.border,borderRadius:8,padding:"16px",textAlign:"center",cursor:"pointer",transition:"border-color .15s"}} onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}><Icon name="photo" size={22} color={C.dim}/><div style={{fontSize:12,color:C.sub,marginTop:4}}>Klik om foto's toe te voegen</div><div style={{fontSize:10,color:C.dim,marginTop:2}}>JPG, PNG · Max 10MB per foto</div></div>}
+      </div>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><Btn onClick={()=>onNav("meldingen")} v="secondary">Annuleren</Btn><Btn onClick={go}>Indienen</Btn></div>
+    </div>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// RAPPORTAGE (Monthly PDF Report)
+// ═══════════════════════════════════════════
+const Rapportage=({mel,org,users,onNotify})=>{
+  const now=new Date();
+  const[selMonth,setSelMonth]=useState(now.getMonth());
+  const[selYear,setSelYear]=useState(now.getFullYear());
+  const months=["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+  const filtered=mel.filter(m=>{const d=new Date(m.at);return d.getMonth()===selMonth&&d.getFullYear()===selYear});
+  const resolved=filtered.filter(m=>m.status==="resolved"||m.status==="closed");
+  const open=filtered.filter(m=>m.status==="open"||m.status==="in_progress");
+  const byCat={};filtered.forEach(m=>{byCat[m.cat]=(byCat[m.cat]||0)+1});
+  const avgTime=resolved.length?Math.round(resolved.reduce((a,m)=>{const d1=new Date(m.at);const d2=new Date(m.resolvedAt||m.up);return a+(d2-d1)/(36e5)},0)/resolved.length):0;
+
+  const genPDF=()=>{
+    const mn=months[selMonth]+" "+selYear;
+    const lines=resolved.map(m=>{
+      const room=org.rooms.find(r=>r.id===m.rId);const floor=org.floors.find(f=>f.id===m.fId);const bld=(org.buildings||[]).find(b=>b.id===(m.bId||(floor&&floor.bId)));
+      const tech=users.find(u=>u.id===m.to);
+      const d1=new Date(m.at);const d2=new Date(m.resolvedAt||m.up);
+      const hrs=Math.round((d2-d1)/(36e5));
+      return{title:m.title,desc:m.desc,cat:m.cat,prio:PRIORITY[m.prio]?.l||m.prio,loc:(bld?bld.name+" · ":"")+(floor?.name||"")+" - "+(room?.name||""),tech:tech?.name||"Niet toegewezen",date:fmtDate(m.at),resolved:fmtDate(m.resolvedAt||m.up),time:hrs+"u",comments:m.comments.length};
+    });
+    var h='<!DOCTYPE html><html><head><title>TechMeld Rapport - '+mn;
+    h+='<\/title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:32px;color:#1e293b;font-size:12px}';
+    h+='.header{display:flex;justify-content:space-between;border-bottom:3px solid #2563eb;padding-bottom:16px;margin-bottom:24px}';
+    h+='.logo{font-size:24px;font-weight:800;color:#2563eb}.period{font-size:18px;font-weight:700;margin-top:4px}';
+    h+='.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}.stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}.stat-num{font-size:28px;font-weight:800;color:#2563eb}.stat-label{font-size:10px;color:#64748b;margin-top:2px}';
+    h+='table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#f1f5f9;font-weight:700;text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;font-size:11px}';
+    h+='td{padding:8px;border-bottom:1px solid #f1f5f9;font-size:11px;vertical-align:top}';
+    h+='.footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:10px}';
+    h+='@media print{body{padding:16px}}<\/style><\/head><body>';
+    h+='<div class="header"><div><div class="logo">TechMeld<\/div><div class="period">Maandrapport '+mn+'<\/div><div style="color:#64748b;margin-top:4px">'+org.name+'<\/div><\/div>';
+    h+='<div style="text-align:right;color:#64748b"><div>Gegenereerd: '+new Date().toLocaleDateString("nl-BE")+'<\/div><\/div><\/div>';
+    h+='<div class="stats">';
+    h+='<div class="stat"><div class="stat-num">'+filtered.length+'<\/div><div class="stat-label">Totaal<\/div><\/div>';
+    h+='<div class="stat"><div class="stat-num" style="color:#16a34a">'+resolved.length+'<\/div><div class="stat-label">Opgelost<\/div><\/div>';
+    h+='<div class="stat"><div class="stat-num" style="color:#d97706">'+open.length+'<\/div><div class="stat-label">Open<\/div><\/div>';
+    h+='<div class="stat"><div class="stat-num" style="color:#7c3aed">'+avgTime+'u<\/div><div class="stat-label">Gem. oplostijd<\/div><\/div>';
+    h+='<\/div>';
+    h+='<h3 style="font-size:14px;margin-bottom:8px">Afgehandelde meldingen ('+resolved.length+')<\/h3>';
+    h+='<table><tr><th>Melding<\/th><th>Categorie<\/th><th>Prioriteit<\/th><th>Locatie<\/th><th>Technicus<\/th><th>Gemeld<\/th><th>Opgelost<\/th><\/tr>';
+    lines.forEach(function(l){h+='<tr><td><strong>'+l.title+'<\/strong><\/td><td>'+l.cat+'<\/td><td>'+l.prio+'<\/td><td>'+l.loc+'<\/td><td>'+l.tech+'<\/td><td>'+l.date+'<\/td><td>'+l.resolved+'<\/td><\/tr>'});
+    h+='<\/table>';
+    h+='<div class="footer">TechMeld - Genk, Belgie - info@techmeld.eu<\/div>';
+    h+='<\/body><\/html>';
+    var w=window.open('','_blank');w.document.write(h);w.document.close();
+    setTimeout(function(){w.print()},300);
+    onNotify({title:"Rapport gegenereerd",type:"success"});
+  };
+
+  return <div style={{padding:"20px 16px",maxWidth:880}}>
+    <h2 style={{fontSize:22,fontWeight:800,marginBottom:16}}>Rapportage</h2>
+    <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.border,padding:20,marginBottom:16}}>
+      <div style={{fontSize:13,fontWeight:700,marginBottom:12}}>Selecteer periode</div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+        <Sel label="" value={selMonth} onChange={v=>setSelMonth(parseInt(v))} options={months.map((m,i)=>({v:i,l:m}))}/>
+        <Sel label="" value={selYear} onChange={v=>setSelYear(parseInt(v))} options={[2025,2026,2027].map(y=>({v:y,l:String(y)}))}/>
+        <Btn onClick={genPDF} sx={{padding:"9px 20px",fontSize:13}}>PDF Genereren</Btn>
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16}}>
+      {[["Totaal",filtered.length,C.accent],["Opgelost",resolved.length,"#16a34a"],["Open",open.length,"#d97706"],["Gem. oplostijd",avgTime+"u","#7c3aed"]].map(function(item){return <div key={item[0]} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:"14px",textAlign:"center"}}>
+          <div style={{fontSize:28,fontWeight:800,color:item[2]}}>{item[1]}</div>
+          <div style={{fontSize:11,color:C.sub,marginTop:2}}>{item[0]}</div>
+        </div>
+      })}
+    </div>
+    <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.border,padding:20,marginBottom:16}}>
+      <div style={{fontSize:13,fontWeight:700,marginBottom:12}}>Per categorie</div>
+      {Object.entries(byCat).sort(function(a,b){return b[1]-a[1]}).map(function(e){return <div key={e[0]} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid "+C.border}}>
+        <span style={{fontSize:13}}>{e[0]}</span>
+        <span style={{fontSize:13,fontWeight:700}}>{e[1]}</span>
+      </div>})}
+      {Object.keys(byCat).length===0&&<div style={{textAlign:"center",padding:20,color:C.dim,fontSize:13}}>Geen meldingen in deze periode</div>}
+    </div>
+    <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.border,padding:20}}>
+      <div style={{fontSize:13,fontWeight:700,marginBottom:12}}>{"Afgehandelde meldingen ("+resolved.length+")"}</div>
+      {resolved.map(function(m){var tech=users.find(function(u){return u.id===m.to});var room=org.rooms.find(function(r){return r.id===m.rId});return <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.border}}>
+        <div style={{width:8,height:8,borderRadius:4,background:"#16a34a",flexShrink:0}}/>
+        <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.title}</div><div style={{fontSize:11,color:C.sub}}>{m.cat+(room?" · "+room.name:"")+(tech?" · "+tech.name:"")}</div></div>
+        <div style={{fontSize:11,color:C.dim,whiteSpace:"nowrap"}}>{fmtDate(m.resolvedAt||m.up)}</div>
+      </div>})}
+      {resolved.length===0&&<div style={{textAlign:"center",padding:20,color:C.dim,fontSize:13}}>Nog geen opgeloste meldingen</div>}
+    </div>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// GROEPSDASHBOARD
+// ═══════════════════════════════════════════
+const GroepDashboard=({org,orgId,sub,onNav,onNotify})=>{
+  const[locaties,setLocaties]=useState([]);
+  const[allData,setAllData]=useState({});
+  const[loading,setLoading]=useState(true);
+  const groepId=org.groepId||orgId;
+
+  useEffect(()=>{
+    if(!groepId)return;
+    (async()=>{
+      setLoading(true);
+      try{
+        let locs=await DB.getGroepLocaties(groepId);
+        if(locs.length===0)locs=[{id:orgId,...org}];
+        setLocaties(locs);
+        const data={};
+        for(const loc of locs){
+          const mel=await DB.getLocatieMeldingen(loc.id);
+          const users=await DB.getLocatieUsers(loc.id);
+          data[loc.id]={mel,users};
+        }
+        setAllData(data);
+      }catch(e){console.error("Groep load error:",e)}
+      setLoading(false);
+    })();
+  },[groepId]);
+
+  if(loading)return <div style={{padding:"20px 16px",textAlign:"center"}}><p style={{color:C.dim}}>Locatiegegevens laden...</p></div>;
+
+  const totals={mel:0,open:0,prog:0,done:0,crit:0,users:0};
+  locaties.forEach(loc=>{
+    const d=allData[loc.id]||{mel:[],users:[]};
+    totals.mel+=d.mel.length;
+    totals.open+=d.mel.filter(m=>m.status==="open").length;
+    totals.prog+=d.mel.filter(m=>m.status==="in_progress").length;
+    totals.done+=d.mel.filter(m=>m.status==="resolved"||m.status==="closed").length;
+    totals.crit+=d.mel.filter(m=>m.prio==="critical"&&m.status!=="resolved"&&m.status!=="closed").length;
+    totals.users+=d.users.length;
+  });
+
+  const plan=PLANS.find(p=>p.id===(sub?.plan||"groep"));
+  const nLoc=locaties.length;
+  const discount=plan?.volumeKorting?Object.entries(plan.volumeKorting).sort((a,b)=>b[0]-a[0]).find(([n])=>nLoc>=parseInt(n)):null;
+  const pricePerLoc=plan?Math.round(plan.price*(1-(discount?discount[1]:0))):129;
+
+  return <div style={{padding:"20px 16px",maxWidth:1100}}>
+    <div style={{marginBottom:20}}>
+      <h1 style={{fontSize:24,fontWeight:800,margin:0}}>Groepsdashboard</h1>
+      <p style={{fontSize:12,color:C.dim,marginTop:2}}>{locaties.length} locaties · {totals.users} gebruikers · {totals.mel} meldingen totaal</p>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:20}}>
+      {[{l:"Totaal",v:totals.mel,c:C.accent},{l:"Open",v:totals.open,c:"#2563eb"},{l:"In Behandeling",v:totals.prog,c:"#d97706"},{l:"Opgelost",v:totals.done,c:"#16a34a"},{l:"Kritiek",v:totals.crit,c:"#dc2626"}].map((x,i)=>
+        <div key={i} style={{background:C.card,borderRadius:12,padding:14,border:"1px solid "+C.border}}>
+          <div style={{fontSize:10,color:C.dim,fontWeight:600,textTransform:"uppercase",letterSpacing:".04em",marginBottom:4}}>{x.l}</div>
+          <div style={{fontSize:28,color:x.c,fontWeight:800}}>{x.v}</div>
+        </div>
+      )}
+    </div>
+    {discount&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#166534"}}>
+      🎉 Volume korting actief: <strong>{Math.round(discount[1]*100)}% korting</strong> ({nLoc} locaties) — €{pricePerLoc}/locatie/mnd i.p.v. €{plan.price}
+    </div>}
+    <h3 style={{fontSize:15,fontWeight:700,marginBottom:10}}>Per Locatie</h3>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12}}>
+      {locaties.map(loc=>{
+        const d=allData[loc.id]||{mel:[],users:[]};
+        const open=d.mel.filter(m=>m.status==="open").length;
+        const prog=d.mel.filter(m=>m.status==="in_progress").length;
+        const done=d.mel.filter(m=>m.status==="resolved"||m.status==="closed").length;
+        const crit=d.mel.filter(m=>m.prio==="critical"&&m.status!=="resolved"&&m.status!=="closed").length;
+        return <div key={loc.id} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div><div style={{fontSize:14,fontWeight:700}}>{loc.name}</div><div style={{fontSize:11,color:C.dim}}>{d.users.length} gebruikers · {d.mel.length} meldingen</div></div>
+            {crit>0&&<Tag c="#dc2626" bg="#fef2f2">{crit} kritiek</Tag>}
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <div style={{flex:1,background:"#eff6ff",borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:"#2563eb"}}>{open}</div><div style={{fontSize:9,color:"#64748b"}}>Open</div></div>
+            <div style={{flex:1,background:"#fffbeb",borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:"#d97706"}}>{prog}</div><div style={{fontSize:9,color:"#64748b"}}>Bezig</div></div>
+            <div style={{flex:1,background:"#f0fdf4",borderRadius:6,padding:"6px 8px",textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:"#16a34a"}}>{done}</div><div style={{fontSize:9,color:"#64748b"}}>Klaar</div></div>
+          </div>
+        </div>;
+      })}
+    </div>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// LOCATIEBEHEER
+// ═══════════════════════════════════════════
+const LocatieBeheer=({org,orgId,onNotify})=>{
+  const[locaties,setLocaties]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[adding,setAdding]=useState(false);
+  const[newName,setNewName]=useState("");
+  const[newType,setNewType]=useState("care");
+  const groepId=org.groepId||orgId;
+
+  const loadLocaties=async()=>{
+    setLoading(true);
+    try{
+      let locs=await DB.getGroepLocaties(groepId);
+      // Ensure current org is in the group
+      if(!org.groepId&&firebaseReady){
+        await DB.setGroepId(orgId,groepId);
+      }
+      if(locs.length===0)locs=[{id:orgId,...org}];
+      setLocaties(locs);
+    }catch(e){console.error(e)}
+    setLoading(false);
+  };
+
+  useEffect(()=>{loadLocaties()},[groepId]);
+
+  const addLoc=async()=>{
+    if(!newName.trim())return;
+    try{
+      await DB.addLocatie(groepId,newName.trim(),newType);
+      onNotify({title:"Locatie toegevoegd",msg:newName,type:"success"});
+      setNewName("");setAdding(false);
+      loadLocaties();
+    }catch(e){onNotify({title:"Fout",msg:e.message,type:"error"})}
+  };
+
+  const plan=PLANS.find(p=>p.id==="groep");
+  const nLoc=locaties.length;
+  const discount=plan?.volumeKorting?Object.entries(plan.volumeKorting).sort((a,b)=>b[0]-a[0]).find(([n])=>nLoc>=parseInt(n)):null;
+  const pricePerLoc=plan?Math.round(plan.price*(1-(discount?discount[1]:0))):129;
+  const totalPrice=pricePerLoc*nLoc;
+
+  return <div style={{padding:"20px 16px",maxWidth:880}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+      <div><h1 style={{fontSize:24,fontWeight:800,margin:0}}>Locaties</h1><p style={{fontSize:12,color:C.dim,marginTop:1}}>{nLoc} locatie{nLoc!==1?"s":""} · €{pricePerLoc}/locatie/mnd · Totaal €{totalPrice}/mnd</p></div>
+      <Btn onClick={()=>setAdding(true)} sm>+ Locatie toevoegen</Btn>
+    </div>
+    {discount&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:12,color:"#166534"}}>
+      🎉 Volume korting: <strong>{Math.round(discount[1]*100)}%</strong> ({nLoc} locaties) — €{pricePerLoc}/locatie i.p.v. €{plan.price}
+    </div>}
+    {nLoc<5&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 16px",marginBottom:14,fontSize:12,color:"#1e40af"}}>
+      💡 Vanaf 5 locaties krijgt u automatisch 10% volume korting!
+    </div>}
+    {adding&&<div style={{background:C.card,borderRadius:10,padding:14,border:"1px solid "+C.accent,marginBottom:12}}>
+      <div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:150}}><Inp label="Locatienaam" value={newName} onChange={v=>setNewName(v)} placeholder="WZC De Linde"/></div>
+        <div style={{minWidth:120}}><Sel label="Type" value={newType} onChange={v=>setNewType(v)} options={[{v:"care",l:"Zorginstelling"},{v:"hospital",l:"Ziekenhuis"},{v:"hotel",l:"Hotel"}]}/></div>
+        <Btn onClick={addLoc} sm>Toevoegen</Btn>
+        <Btn onClick={()=>setAdding(false)} v="secondary" sm>✕</Btn>
+      </div>
+    </div>}
+    {loading?<p style={{color:C.dim,textAlign:"center",padding:20}}>Laden...</p>:
+      locaties.map(loc=><div key={loc.id} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:40,height:40,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="locatie" size={20} color={C.accent}/></div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:14,fontWeight:700}}>{loc.name}{loc.id===orgId?" (hoofd)":""}</div>
+          <div style={{fontSize:11,color:C.dim}}>{loc.type==="care"?"Zorginstelling":loc.type==="hospital"?"Ziekenhuis":"Hotel"} · {(loc.buildings||[]).length} gebouw{(loc.buildings||[]).length!==1?"en":""}</div>
+        </div>
+        <Tag c="#059669" bg="#f0fdf4">Actief</Tag>
+      </div>)
+    }
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// VERGELIJKENDE RAPPORTAGE
+// ═══════════════════════════════════════════
+const VergelijkendeRapportage=({org,orgId,onNotify})=>{
+  const[locaties,setLocaties]=useState([]);
+  const[allData,setAllData]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[selMonth,setSelMonth]=useState(new Date().getMonth());
+  const[selYear,setSelYear]=useState(new Date().getFullYear());
+  const months=["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
+  const groepId=org.groepId||orgId;
+
+  useEffect(()=>{
+    (async()=>{
+      setLoading(true);
+      try{
+        let locs=await DB.getGroepLocaties(groepId);
+        if(locs.length===0)locs=[{id:orgId,...org}];
+        setLocaties(locs);
+        const data={};
+        for(const loc of locs){data[loc.id]={mel:await DB.getLocatieMeldingen(loc.id)};}
+        setAllData(data);
+      }catch(e){console.error(e)}
+      setLoading(false);
+    })();
+  },[groepId]);
+
+  const getStats=(locId)=>{
+    const mel=(allData[locId]?.mel||[]).filter(m=>{const d=new Date(m.at);return d.getMonth()===selMonth&&d.getFullYear()===selYear});
+    const total=mel.length;
+    const open=mel.filter(m=>m.status==="open"||m.status==="in_progress").length;
+    const done=mel.filter(m=>m.status==="resolved"||m.status==="closed").length;
+    const crit=mel.filter(m=>m.prio==="critical").length;
+    const resolved=mel.filter(m=>m.status==="resolved"||m.status==="closed");
+    const avgTime=resolved.length?Math.round(resolved.reduce((a,m)=>{const d1=new Date(m.at);const d2=new Date(m.resolvedAt||m.up);return a+Math.max(0,(d2-d1)/(36e5))},0)/resolved.length):0;
+    const byCat={};mel.forEach(m=>{byCat[m.cat]=(byCat[m.cat]||0)+1});
+    const topCat=Object.entries(byCat).sort((a,b)=>b[1]-a[1])[0];
+    return{total,open,done,crit,avgTime,topCat:topCat?topCat[0]+(" ("+topCat[1]+")"):"—",resolveRate:total?Math.round(done/total*100):0};
+  };
+
+  const genPDF=()=>{
+    const mn=months[selMonth]+" "+selYear;
+    var h='<!DOCTYPE html><html><head><title>TechMeld Vergelijkende Rapportage - '+mn;
+    h+='</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:24px;color:#1e293b;font-size:11px}';
+    h+='table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#1e293b;color:white;text-align:left;padding:8px;font-size:10px}';
+    h+='td{padding:8px;border-bottom:1px solid #e2e8f0;font-size:11px}.best{background:#f0fdf4;font-weight:700}';
+    h+='@media print{body{padding:12px}}</style></head><body>';
+    h+='<div style="border-bottom:3px solid #059669;padding-bottom:12px;margin-bottom:16px"><span style="font-size:22px;font-weight:800;color:#059669">TechMeld</span><span style="font-size:9px;color:#059669;vertical-align:super">™</span>';
+    h+='<div style="font-size:16px;font-weight:700;margin-top:4px">Vergelijkende Rapportage — '+mn+'</div>';
+    h+='<div style="color:#64748b;font-size:11px">'+org.name+' · '+locaties.length+' locaties</div></div>';
+    h+='<table><tr><th>Locatie</th><th>Totaal</th><th>Open</th><th>Opgelost</th><th>Kritiek</th><th>Gem. Oplostijd</th><th>Oplospercentage</th><th>Top Categorie</th></tr>';
+    const allStats=locaties.map(loc=>({name:loc.name,...getStats(loc.id)}));
+    const bestResolve=Math.max(...allStats.map(s=>s.resolveRate));
+    const bestTime=Math.min(...allStats.filter(s=>s.avgTime>0).map(s=>s.avgTime));
+    allStats.forEach(s=>{
+      h+='<tr><td><strong>'+s.name+'</strong></td><td>'+s.total+'</td><td>'+s.open+'</td><td>'+s.done+'</td><td style="color:'+(s.crit>0?'#dc2626':'#16a34a')+'">'+s.crit+'</td>';
+      h+='<td'+(s.avgTime===bestTime&&s.avgTime>0?' class="best"':'')+'>'+s.avgTime+'u</td>';
+      h+='<td'+(s.resolveRate===bestResolve&&s.resolveRate>0?' class="best"':'')+'>'+s.resolveRate+'%</td>';
+      h+='<td>'+s.topCat+'</td></tr>';
+    });
+    h+='</table><div style="margin-top:24px;text-align:center;color:#94a3b8;font-size:9px">TechMeld™ Vergelijkende Rapportage · Gegenereerd '+new Date().toLocaleDateString("nl-BE")+'</div></body></html>';
+    var w=window.open('','_blank');w.document.write(h);w.document.close();setTimeout(()=>w.print(),300);
+    onNotify({title:"Vergelijkend rapport gegenereerd",type:"success"});
+  };
+
+  if(loading)return <div style={{padding:"20px 16px",textAlign:"center"}}><p style={{color:C.dim}}>Laden...</p></div>;
+
+  return <div style={{padding:"20px 16px",maxWidth:1100}}>
+    <h2 style={{fontSize:22,fontWeight:800,marginBottom:16}}>Vergelijkende Rapportage</h2>
+    <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.border,padding:16,marginBottom:16,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+      <Sel label="" value={selMonth} onChange={v=>setSelMonth(parseInt(v))} options={months.map((m,i)=>({v:i,l:m}))}/>
+      <Sel label="" value={selYear} onChange={v=>setSelYear(parseInt(v))} options={[2025,2026,2027].map(y=>({v:y,l:String(y)}))}/>
+      <Btn onClick={genPDF} sm>📄 PDF Export</Btn>
+    </div>
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",background:C.card,borderRadius:12,overflow:"hidden",border:"1px solid "+C.border}}>
+        <thead><tr style={{background:"#1e293b"}}>
+          {["Locatie","Totaal","Open","Opgelost","Kritiek","Gem. Oplostijd","Oplos %","Top Categorie"].map(h=><th key={h} style={{padding:"10px 12px",color:"white",fontSize:11,fontWeight:600,textAlign:"left"}}>{h}</th>)}
+        </tr></thead>
+        <tbody>
+          {locaties.map(loc=>{const s=getStats(loc.id);return <tr key={loc.id} style={{borderBottom:"1px solid "+C.border}}>
+            <td style={{padding:"10px 12px",fontWeight:700,fontSize:13}}>{loc.name}</td>
+            <td style={{padding:"10px 12px",fontSize:13}}>{s.total}</td>
+            <td style={{padding:"10px 12px",fontSize:13,color:"#d97706",fontWeight:600}}>{s.open}</td>
+            <td style={{padding:"10px 12px",fontSize:13,color:"#16a34a",fontWeight:600}}>{s.done}</td>
+            <td style={{padding:"10px 12px",fontSize:13,color:s.crit>0?"#dc2626":"#16a34a",fontWeight:600}}>{s.crit}</td>
+            <td style={{padding:"10px 12px",fontSize:13}}>{s.avgTime}u</td>
+            <td style={{padding:"10px 12px"}}><div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{flex:1,height:6,background:C.border,borderRadius:3,overflow:"hidden",maxWidth:80}}><div style={{width:s.resolveRate+"%",height:"100%",background:s.resolveRate>=80?"#16a34a":s.resolveRate>=50?"#d97706":"#dc2626",borderRadius:3}}/></div>
+              <span style={{fontSize:12,fontWeight:600}}>{s.resolveRate}%</span>
+            </div></td>
+            <td style={{padding:"10px 12px",fontSize:12,color:C.dim}}>{s.topCat}</td>
+          </tr>})}
+        </tbody>
+      </table>
+    </div>
+  </div>;
+};
+
+const Building=({org,onUpd,onNotify,sub})=>{
+  const buildings=org.buildings||[{id:"b_default",name:"Gebouw"}];
+  const[selB,setSelB]=useState(buildings[0]?.id||"");
+  const[nf,setNf]=useState({name:"",nr:0});const[nr,setNr]=useState({name:"",fId:"",t:"patient"});const[sf,setSf]=useState(false);const[sr,setSr]=useState(false);
+  const[sb,setSb]=useState(false);const[nb,setNb]=useState("");const[editB,setEditB]=useState(null);const[editBName,setEditBName]=useState("");
+  const rt={patient:"Patiëntkamer",common:"Gemeensch.",storage:"Berging",technical:"Technisch",special:"Speciaal",office:"Kantoor"};
+  const bFloors=org.floors.filter(f=>f.bId===selB).sort((a,b)=>a.nr-b.nr);
+  const bRooms=org.rooms.filter(r=>{const fl=org.floors.find(f=>f.id===r.fId);return fl&&fl.bId===selB});
+  const maxB=(sub&&PLANS.find(p=>p.id===sub.plan))||{buildings:1};
+  const addBuilding=()=>{if(!nb.trim())return;if(buildings.length>=maxB.buildings&&maxB.buildings!==999){onNotify({title:"Limiet bereikt",msg:"Uw abonnement staat max "+maxB.buildings+" gebouw(en) toe.",type:"error"});return}const bid=uid();onUpd({...org,buildings:[...buildings,{id:bid,name:nb.trim()}]});setNb("");setSb(false);setSelB(bid);onNotify({title:"Gebouw toegevoegd",type:"success"})};
+  const renameBuilding=()=>{if(!editBName.trim())return;onUpd({...org,buildings:buildings.map(b=>b.id===editB?{...b,name:editBName.trim()}:b)});setEditB(null);setEditBName("");onNotify({title:"Hernoemd",type:"success"})};
+  const delBuilding=(bid)=>{if(buildings.length<=1){onNotify({title:"Minimaal 1 gebouw nodig",type:"error"});return}if(!confirm("Gebouw verwijderen? Alle verdiepingen en ruimtes worden ook verwijderd."))return;const floorIds=org.floors.filter(f=>f.bId===bid).map(f=>f.id);onUpd({...org,buildings:buildings.filter(b=>b.id!==bid),floors:org.floors.filter(f=>f.bId!==bid),rooms:org.rooms.filter(r=>!floorIds.includes(r.fId))});setSelB(buildings.find(b=>b.id!==bid)?.id||"");onNotify({title:"Verwijderd",type:"success"})};
+  return <div style={{padding:"20px 16px",maxWidth:880}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+      <div><h1 style={{fontSize:24,fontWeight:800,margin:0}}>Gebouwen</h1><p style={{fontSize:12,color:buildings.length>=maxB.buildings&&maxB.buildings<999?"#dc2626":C.dim,marginTop:1}}>{buildings.length}/{maxB.buildings<999?maxB.buildings:"∞"} gebouwen · {org.floors.length} verdiepingen · {org.rooms.length} ruimtes</p></div>
+      <div style={{display:"flex",gap:6}}><Btn onClick={()=>setSb(true)} v="secondary" sm>+ Gebouw</Btn><Btn onClick={()=>setSf(true)} v="secondary" sm>+ Verdieping</Btn><Btn onClick={()=>setSr(true)} sm>+ Ruimte</Btn></div>
+    </div>
+    {/* Building tabs */}
+    <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+      {buildings.map(b=><div key={b.id} style={{display:"flex",alignItems:"center",gap:0}}>
+        <button onClick={()=>setSelB(b.id)} style={{padding:"7px 14px",borderRadius:editB===b.id?"8px 0 0 8px":"8px",border:"1px solid "+(selB===b.id?C.accent:C.border),borderRight:editB===b.id?"none":undefined,background:selB===b.id?C.accentBg:C.card,color:selB===b.id?C.accent:C.sub,fontSize:13,fontWeight:selB===b.id?700:500,cursor:"pointer",transition:"all .15s"}}><Icon name="building" size={13} color={selB===b.id?C.accent:C.dim}/> {b.name}</button>
+        {selB===b.id&&editB!==b.id&&<button onClick={()=>{setEditB(b.id);setEditBName(b.name)}} style={{padding:"7px 6px",border:"1px solid "+C.accent,borderLeft:"none",borderRadius:"0 8px 8px 0",background:C.accentBg,cursor:"pointer",display:"flex",alignItems:"center"}}><Icon name="edit" size={11} color={C.accent}/></button>}
+      </div>)}
+    </div>
+    {/* Edit building name */}
+    {editB&&<div style={{background:C.card,borderRadius:10,padding:14,border:"1px solid "+C.accent,marginBottom:12,display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}>
+      <div style={{flex:2,minWidth:140}}><Inp label="Gebouwnaam" value={editBName} onChange={v=>setEditBName(v)}/></div>
+      <Btn onClick={renameBuilding} sm>Opslaan</Btn>
+      <Btn onClick={()=>{delBuilding(editB);setEditB(null)}} v="danger" sm>Verwijderen</Btn>
+      <Btn onClick={()=>setEditB(null)} v="secondary" sm>✕</Btn>
+    </div>}
+    {/* Add building */}
+    {sb&&<div style={{background:C.card,borderRadius:10,padding:14,border:"1px solid #059669",marginBottom:12}}><div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}><div style={{flex:2,minWidth:140}}><Inp label="Nieuw gebouw" value={nb} onChange={v=>setNb(v)} placeholder="bijv. Bijgebouw, Spa, Conferentiecentrum"/></div><Btn onClick={addBuilding} sm>OK</Btn><Btn onClick={()=>setSb(false)} v="secondary" sm>✕</Btn></div></div>}
+    {/* Add floor */}
+    {sf&&<div style={{background:C.card,borderRadius:10,padding:14,border:"1px solid "+C.accent,marginBottom:12}}><div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}><div style={{flex:2,minWidth:120}}><Inp label="Naam" value={nf.name} onChange={v=>setNf({...nf,name:v})} placeholder="bijv. 3e Verdieping"/></div><div style={{flex:1,minWidth:50}}><Inp label="Nr" type="number" value={nf.nr} onChange={v=>setNf({...nf,nr:parseInt(v)||0})}/></div><Btn onClick={()=>{if(!nf.name)return;onUpd({...org,floors:[...org.floors,{id:uid(),name:nf.name,nr:nf.nr,bId:selB}].sort((a,b)=>a.nr-b.nr)});setNf({name:"",nr:0});setSf(false);onNotify({title:"Toegevoegd",type:"success"})}} sm>OK</Btn><Btn onClick={()=>setSf(false)} v="secondary" sm>✕</Btn></div></div>}
+    {/* Add room */}
+    {sr&&<div style={{background:C.card,borderRadius:10,padding:14,border:"1px solid "+C.accent,marginBottom:12}}><div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}><div style={{flex:2,minWidth:100}}><Inp label="Naam" value={nr.name} onChange={v=>setNr({...nr,name:v})} placeholder="Kamer 301"/></div><div style={{flex:1,minWidth:90}}><Sel label="Verdieping" value={nr.fId||bFloors[0]?.id||""} onChange={v=>setNr({...nr,fId:v})} options={bFloors.map(f=>({v:f.id,l:f.name}))}/></div><div style={{flex:1,minWidth:90}}><Sel label="Type" value={nr.t} onChange={v=>setNr({...nr,t:v})} options={Object.entries(rt).map(([k,v])=>({v:k,l:v}))}/></div><Btn onClick={()=>{if(!nr.name)return;const fId=nr.fId||bFloors[0]?.id;if(!fId)return;onUpd({...org,rooms:[...org.rooms,{id:uid(),name:nr.name,fId:fId,t:nr.t}]});setNr({name:"",fId:"",t:"patient"});setSr(false);onNotify({title:"Toegevoegd",type:"success"})}} sm>OK</Btn><Btn onClick={()=>setSr(false)} v="secondary" sm>✕</Btn></div></div>}
+    {/* Floors & rooms for selected building */}
+    {bFloors.length===0&&<div style={{background:C.card,borderRadius:10,border:"1px solid "+C.border,padding:28,textAlign:"center"}}><p style={{color:C.dim,fontSize:13}}>Nog geen verdiepingen. Klik "+ Verdieping" om te beginnen.</p></div>}
+    {bFloors.map(fl=>{const rs=org.rooms.filter(r=>r.fId===fl.id);return <div key={fl.id} style={{background:C.card,borderRadius:10,border:"1px solid "+C.border,overflow:"hidden",marginBottom:6}}>
+      <div style={{padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:rs.length?"1px solid "+C.border:"none",background:"#f8fafc"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:28,height:28,borderRadius:6,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.accent}}>{fl.nr}</div><div><div style={{fontSize:13,fontWeight:600}}>{fl.name}</div><div style={{fontSize:10,color:C.dim}}>{rs.length} ruimtes</div></div></div>
+        <Btn onClick={()=>onUpd({...org,floors:org.floors.filter(f=>f.id!==fl.id),rooms:org.rooms.filter(r=>r.fId!==fl.id)})} v="danger" sm><Icon name="delete" size={13}/></Btn>
+      </div>
+      {rs.length>0&&<div style={{padding:"8px 14px",display:"flex",flexWrap:"wrap",gap:4}}>{rs.map(room=><div key={room.id} style={{padding:"4px 8px",borderRadius:5,border:"1px solid "+C.border,background:"#f8fafc",display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11}}>{room.name}</span><span style={{fontSize:8,color:C.dim,textTransform:"uppercase",background:C.accentBg,padding:"1px 4px",borderRadius:2}}>{rt[room.t]||room.t}</span><button onClick={()=>onUpd({...org,rooms:org.rooms.filter(r=>r.id!==room.id)})} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><Icon name="close" size={10} color={C.dim}/></button></div>)}</div>}
+    </div>})}
+  </div>;
+};
+
+const FloorPlans=({org,onNotify,orgId})=>{
+  const buildings=org.buildings||[{id:"b_default",name:"Gebouw"}];
+  const[selB,setSelB]=useState(buildings[0]?.id||"");
+  const bFloors=org.floors.filter(f=>f.bId===selB);
+  const[sel,setSel]=useState(bFloors[0]?.id||"");
+  const[plans,setPlans]=useState({});
+  const[uploading,setUploading]=useState(false);
+  const[progress,setProgress]=useState(0);
+  const fileRef=useRef(null);
+
+  // Load floorplans from Firestore
+  useEffect(()=>{
+    if(!firebaseReady||!orgId)return;
+    const unsub=db.collection("organizations").doc(orgId).collection("floorplans").onSnapshot(snap=>{
+      const fp={};
+      snap.forEach(doc=>{const d=doc.data();fp[d.floorId]={id:doc.id,...d}});
+      setPlans(fp);
+    });
+    return ()=>unsub();
+  },[orgId]);
+
+  const handleUpload=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    if(!file.type.match(/image\/(png|jpe?g)|application\/pdf/)){onNotify({title:"Ongeldig bestandstype",msg:"Gebruik PNG, JPG of PDF",type:"error"});return}
+    if(file.size>25*1024*1024){onNotify({title:"Bestand te groot",msg:"Max 25MB",type:"error"});return}
+    if(!sel){onNotify({title:"Selecteer eerst een verdieping",type:"error"});return}
+    setUploading(true);setProgress(0);
+    try{
+      if(storage&&orgId){
+        const path="floorplans/"+orgId+"/"+sel+"_"+Date.now()+"_"+file.name;
+        const ref=storage.ref(path);
+        const task=ref.put(file);
+        task.on("state_changed",snap=>{setProgress(Math.round((snap.bytesTransferred/snap.totalBytes)*100))});
+        await task;
+        const url=await ref.getDownloadURL();
+        // Save to Firestore
+        const existing=plans[sel];
+        const fpData={floorId:sel,buildingId:selB,name:file.name,url:url,path:path,size:file.size,type:file.type,uploadedAt:new Date().toISOString()};
+        if(existing?.id){
+          // Delete old file
+          if(existing.path){try{await storage.ref(existing.path).delete()}catch(e){}}
+          await db.collection("organizations").doc(orgId).collection("floorplans").doc(existing.id).set(fpData);
+        }else{
+          await db.collection("organizations").doc(orgId).collection("floorplans").add(fpData);
+        }
+        onNotify({title:"Plattegrond geüpload!",msg:file.name,type:"success"});
+      }else{
+        // Demo mode — use local URL
+        const reader=new FileReader();
+        reader.onload=(ev)=>{
+          setPlans(p=>({...p,[sel]:{floorId:sel,name:file.name,url:ev.target.result,type:file.type}}));
+          onNotify({title:"Plattegrond geüpload (demo)",msg:file.name,type:"success"});
+        };
+        reader.readAsDataURL(file);
+      }
+    }catch(e){
+      console.error("Upload error:",e);
+      onNotify({title:"Upload mislukt",msg:e.message||"Probeer opnieuw",type:"error"});
+    }
+    setUploading(false);setProgress(0);
+    if(fileRef.current)fileRef.current.value="";
+  };
+
+  const handleDelete=async()=>{
+    const fp=plans[sel];
+    if(!fp)return;
+    if(!confirm("Plattegrond verwijderen?"))return;
+    try{
+      if(storage&&orgId&&fp.path){try{await storage.ref(fp.path).delete()}catch(e){}}
+      if(orgId&&fp.id){await db.collection("organizations").doc(orgId).collection("floorplans").doc(fp.id).delete()}
+      setPlans(p=>{const n={...p};delete n[sel];return n});
+      onNotify({title:"Verwijderd",type:"success"});
+    }catch(e){onNotify({title:"Fout",msg:e.message,type:"error"})}
+  };
+
+  const curPlan=plans[sel];
+  const selFloor=bFloors.find(f=>f.id===sel);
+
+  return <div style={{padding:"20px 16px",maxWidth:880}}>
+    <h1 style={{fontSize:24,fontWeight:800,margin:"0 0 14px"}}>Plattegronden</h1>
+    {buildings.length>1&&<div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap"}}>{buildings.map(b=><Btn key={b.id} onClick={()=>{setSelB(b.id);const bf=org.floors.filter(f=>f.bId===b.id);setSel(bf[0]?.id||"")}} v={selB===b.id?"primary":"secondary"} sm>🏢 {b.name}</Btn>)}</div>}
+    <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>{bFloors.map(f=><div key={f.id} style={{position:"relative"}}><Btn onClick={()=>setSel(f.id)} v={sel===f.id?"primary":"secondary"} sm>{f.name} {plans[f.id]?" ✅":""}</Btn></div>)}</div>
+    <input ref={fileRef} type="file" accept="image/png,image/jpeg,application/pdf" onChange={handleUpload} style={{display:"none"}}/>
+    {curPlan?
+      <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,overflow:"hidden"}}>
+        <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f8fafc"}}>
+          <div><div style={{fontSize:13,fontWeight:600}}>{selFloor?.name} — {curPlan.name}</div><div style={{fontSize:10,color:C.dim}}>{curPlan.size?(Math.round(curPlan.size/1024)+"KB"):""}  {curPlan.uploadedAt?("Geüpload: "+new Date(curPlan.uploadedAt).toLocaleDateString("nl-BE")):""}</div></div>
+          <div style={{display:"flex",gap:6}}><Btn onClick={()=>fileRef.current?.click()} v="secondary" sm>Vervangen</Btn><Btn onClick={handleDelete} v="danger" sm><Icon name="delete" size={13}/></Btn></div>
+        </div>
+        {curPlan.type==="application/pdf"?
+          <div style={{padding:20,textAlign:"center"}}><a href={curPlan.url} target="_blank" rel="noopener" style={{color:C.accent,fontWeight:600,fontSize:14}}>📄 PDF openen in nieuw tabblad</a></div>
+        : <div style={{padding:8,textAlign:"center",maxHeight:500,overflow:"auto"}}><img src={curPlan.url} style={{maxWidth:"100%",borderRadius:8}} alt="Plattegrond"/></div>
+        }
+      </div>
+    : <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:28,textAlign:"center",minHeight:240,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        {uploading?<>
+          <div style={{width:52,height:52,borderRadius:14,marginBottom:12,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:18,fontWeight:700,color:C.accent}}>{progress}%</span></div>
+          <h3 style={{fontSize:15,fontWeight:700,margin:"0 0 4px"}}>Uploaden...</h3>
+          <div style={{width:200,height:6,background:C.border,borderRadius:3,marginTop:8,overflow:"hidden"}}><div style={{width:progress+"%",height:"100%",background:C.accent,borderRadius:3,transition:"width .3s"}}/></div>
+        </>:<>
+          <div style={{width:52,height:52,borderRadius:14,marginBottom:12,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="upload" size={24} color={C.accent}/></div>
+          <h3 style={{fontSize:15,fontWeight:700,margin:"0 0 4px"}}>Plattegrond Uploaden</h3>
+          <p style={{fontSize:12,color:C.dim,maxWidth:320,lineHeight:1.5}}>{selFloor?"Upload voor "+selFloor.name:"Selecteer eerst een verdieping"} · PNG, JPG of PDF · Max 25MB</p>
+          <div style={{marginTop:12}}><Btn onClick={()=>fileRef.current?.click()} disabled={!sel}>Bestand kiezen</Btn></div>
+        </>}
+      </div>
+    }
+    {bFloors.length===0&&<div style={{textAlign:"center",padding:30,color:C.dim}}>Geen verdiepingen in dit gebouw. Voeg eerst verdiepingen toe bij Gebouwen.</div>}
+  </div>;
+};
+
+const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
+  const[show,setShow]=useState(false);const[nu,setNu]=useState({name:"",email:"",role:"reporter"});
+  const[editPerms,setEditPerms]=useState(null);const[inviting,setInviting]=useState(false);const[deleting,setDeleting]=useState(null);
+  const rl={admin:"Beheerder",technician:"Technicus",reporter:"Melder"};const rc={admin:"#dc2626",technician:"#d97706",reporter:"#2563eb"};
+  const plan=PLANS.find(p=>p.id===(sub?.plan||"starter"))||PLANS[0];
+  var getUserPerms=function(u){return u.perms||DEFAULT_PERMS[u.role]||DEFAULT_PERMS.reporter};
+  var togglePerm=function(userId,pageId){
+    var u=users.find(function(x){return x.id===userId});
+    var perms=getUserPerms(u);
+    var np=perms.includes(pageId)?perms.filter(function(p){return p!==pageId}):[...perms,pageId];
+    if(!np.includes("dashboard"))np=["dashboard",...np];
+    onUpd(users.map(function(x){return x.id===userId?{...x,perms:np}:x}));
+  };
+  var doDelete=async function(userId,userName,userEmail){
+    if(!confirm("Weet je zeker dat je "+userName+" wilt verwijderen?"))return;
+    setDeleting(userId);
+    try{
+      if(functions){
+        var fn=functions.httpsCallable("deleteUserAccount");
+        await fn({userId:userId,userEmail:userEmail});
+      }
+      onUpd(users.filter(function(x){return x.id!==userId}));
+      onNotify({title:"Verwijderd!",msg:userName+" is volledig verwijderd.",type:"success"});
+    }catch(e){
+      console.error("Delete error:",e);
+      onNotify({title:"Fout bij verwijderen",msg:e.message||"Probeer opnieuw",type:"error"});
+    }
+    setDeleting(null);
+  };
+  var doInvite=async function(){
+    if(!nu.name||!nu.email)return onNotify({title:"Vul naam en email in",type:"error"});
+    // Check user limit
+    if(plan.users<999&&users.length>=plan.users){
+      onNotify({title:"Gebruikerslimiet bereikt",msg:"Uw "+plan.name+" plan staat max "+plan.users+" gebruikers toe. Upgrade om meer toe te voegen.",type:"error"});
+      setInviting(false);return;
+    }
+    setInviting(true);
+    try{
+      if(functions){
+        var inviteUser=functions.httpsCallable("inviteUser");
+        var result=await inviteUser({name:nu.name,email:nu.email,role:nu.role,orgId:orgId});
+        // Send the actual password reset email
+        await auth.sendPasswordResetEmail(nu.email);
+        onNotify({title:"Uitgenodigd!",msg:nu.name+" ontvangt een email om wachtwoord in te stellen.",type:"success"});
+      }else{
+        // Fallback demo mode
+        onUpd([...users,{id:uid(),...nu,perms:DEFAULT_PERMS[nu.role]||DEFAULT_PERMS.reporter,av:nu.name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}]);
+        onNotify({title:"Uitgenodigd (demo)",type:"success"});
+      }
+      setNu({name:"",email:"",role:"reporter"});setShow(false);
+    }catch(e){
+      console.error("Invite error:",e);
+      onNotify({title:"Fout bij uitnodigen",msg:e.message||"Probeer opnieuw",type:"error"});
+    }
+    setInviting(false);
+  };
+  return <div style={{padding:"20px 16px",maxWidth:780}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+      <div><h1 style={{fontSize:24,fontWeight:800,margin:0}}>Gebruikers</h1><p style={{fontSize:12,color:users.length>=plan.users&&plan.users<999?"#dc2626":C.dim,marginTop:1}}>{users.length}/{plan.users<999?plan.users:"∞"} gebruikers</p></div>
+      <Btn onClick={()=>{if(plan.users<999&&users.length>=plan.users){onNotify({title:"Gebruikerslimiet bereikt",msg:"Upgrade uw plan om meer gebruikers toe te voegen.",type:"error"});return}setShow(true)}} sm>+ Toevoegen</Btn>
+    </div>
+    {show&&<div style={{background:C.card,borderRadius:10,padding:14,border:"1px solid "+C.accent,marginBottom:12}}><div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}><div style={{flex:1,minWidth:100}}><Inp label="Naam" value={nu.name} onChange={v=>setNu({...nu,name:v})}/></div><div style={{flex:1,minWidth:100}}><Inp label="E-mail" value={nu.email} onChange={v=>setNu({...nu,email:v})}/></div><div style={{flex:1,minWidth:80}}><Sel label="Rol" value={nu.role} onChange={v=>setNu({...nu,role:v})} options={Object.entries(rl).map(([k,v])=>({v:k,l:v}))}/></div><Btn onClick={doInvite} sm disabled={inviting}>{inviting?"Bezig...":"✉️ Uitnodigen"}</Btn><Btn onClick={()=>setShow(false)} v="secondary" sm>✕</Btn></div><div style={{fontSize:10,color:C.dim,marginTop:6}}>De gebruiker ontvangt een email met een link om een wachtwoord in te stellen.</div></div>}
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>{users.map(u=>{
+      var perms=getUserPerms(u);
+      var isEditing=editPerms===u.id;
+      return <div key={u.id} style={{background:C.card,borderRadius:10,border:"1px solid "+(isEditing?C.accent:C.border),overflow:"hidden"}}>
+        <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,"+rc[u.role]+"40,"+rc[u.role]+"20)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:rc[u.role]}}>{u.av}</div>
+          <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{u.name}{u.id===cur.id&&<span style={{fontSize:10,color:C.accent}}> (u)</span>}</div><div style={{fontSize:11,color:C.dim}}>{u.email}</div></div>
+          <select value={u.role} onChange={e=>{var newRole=e.target.value;onUpd(users.map(x=>x.id===u.id?{...x,role:newRole,perms:DEFAULT_PERMS[newRole]}:x));onNotify({title:"Rol bijgewerkt",type:"success"})}} disabled={u.id===cur.id} style={{padding:"5px 8px",borderRadius:5,border:"1px solid "+C.border,background:C.card,fontSize:11,cursor:u.id===cur.id?"not-allowed":"pointer"}}>{Object.entries(rl).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
+          {cur.role==="admin"&&u.id!==cur.id&&<button onClick={function(){setEditPerms(isEditing?null:u.id)}} style={{padding:"4px 8px",borderRadius:5,border:"1px solid "+(isEditing?C.accent:C.border),background:isEditing?C.accentBg:C.card,cursor:"pointer",fontSize:10,fontWeight:600,color:isEditing?C.accent:C.sub}}>🔑 Toegang</button>}
+          {u.id!==cur.id&&<Btn onClick={function(){doDelete(u.id,u.name,u.email)}} v="danger" sm disabled={deleting===u.id}>{deleting===u.id?"...":"🗑"}</Btn>}
+        </div>
+        {isEditing&&<div style={{padding:"10px 14px",borderTop:"1px solid "+C.border,background:"#f8fafc"}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.sub,marginBottom:8}}>Toegang voor {u.name}:</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {PAGES.map(function(pg){
+              var has=perms.includes(pg.id);
+              var isDashboard=pg.id==="dashboard";
+              return <button key={pg.id} onClick={function(){if(!isDashboard)togglePerm(u.id,pg.id)}} style={{padding:"6px 12px",borderRadius:6,border:"1px solid "+(has?"#bbf7d0":"#fecaca"),background:has?"#f0fdf4":"#fef2f2",cursor:isDashboard?"default":"pointer",fontSize:11,fontWeight:600,color:has?"#16a34a":"#dc2626",opacity:isDashboard?0.6:1,display:"flex",alignItems:"center",gap:4}}>
+                <span>{has?"✓":"✕"}</span>{pg.l}
+              </button>
+            })}
+          </div>
+          <div style={{fontSize:10,color:C.dim,marginTop:6}}>Dashboard is altijd zichtbaar. Klik om toegang aan/uit te zetten.</div>
+        </div>}
+      </div>})}</div>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// SUPER ADMIN PANEL
+// ═══════════════════════════════════════════
+const SUPER_ADMINS=["tigrealata@hotmail.com"];
+const AdminPanel=({curUser})=>{
+  const[orgs,setOrgs]=useState([]);const[allUsers,setAllUsers]=useState([]);const[subs,setSubs]=useState([]);const[loading,setLoading]=useState(true);
+  const[confirm,setConfirm]=useState(null);
+  useEffect(()=>{
+    if(!firebaseReady)return;
+    var unsubs=[];
+    unsubs.push(db.collection('organizations').onSnapshot(function(snap){setOrgs(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}))}));
+    unsubs.push(db.collection('users').onSnapshot(function(snap){setAllUsers(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}).filter(function(u){return !SUPER_ADMINS.includes(u.email)}))}));
+    unsubs.push(db.collection('subscriptions').onSnapshot(function(snap){setSubs(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}))}));
+    setLoading(false);
+    return function(){unsubs.forEach(function(u){u()})};
+  },[]);
+
+  var deleteUser=async function(userId,userEmail){
+    if(functions){
+      var fn=functions.httpsCallable("deleteUserAccount");
+      await fn({userId:userId,userEmail:userEmail});
+    }else{
+      await db.collection('users').doc(userId).delete();
+    }
+    setConfirm(null);
+  };
+
+  var deleteOrg=async function(orgId){
+    if(functions){
+      var fn=functions.httpsCallable("deleteOrganization");
+      await fn({orgId:orgId});
+    }else{
+      await db.collection('organizations').doc(orgId).delete();
+    }
+    setConfirm(null);
+  };
+
+  if(loading)return <div style={{padding:20}}>Laden...</div>;
+  return <div style={{padding:"20px 16px",maxWidth:900}}>
+    <h2 style={{fontSize:22,fontWeight:800,marginBottom:4}}>Admin Panel</h2>
+    <p style={{fontSize:12,color:C.sub,marginBottom:20}}>Overzicht van alle organisaties en gebruikers</p>
+
+    {/* Confirm dialog */}
+    {confirm&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:400,width:"100%",boxShadow:"0 8px 30px rgba(0,0,0,.15)"}}>
+        <div style={{fontSize:16,fontWeight:700,marginBottom:8,color:"#dc2626"}}>{"⚠️ "+confirm.title}</div>
+        <p style={{fontSize:13,color:C.sub,marginBottom:20}}>{confirm.msg}</p>
+        <div style={{display:"flex",gap:10}}>
+          <Btn onClick={confirm.action} v="danger" sx={{flex:1}}>Ja, verwijderen</Btn>
+          <Btn onClick={function(){setConfirm(null)}} v="secondary" sx={{flex:1}}>Annuleren</Btn>
+        </div>
+      </div>
+    </div>}
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:20}}>
+      {[["Organisaties",orgs.length,C.accent],["Gebruikers",allUsers.length,"#7c3aed"],["Abonnementen",subs.length,"#16a34a"]].map(function(s){return <div key={s[0]} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:14,textAlign:"center"}}>
+        <div style={{fontSize:28,fontWeight:800,color:s[2]}}>{s[1]}</div>
+        <div style={{fontSize:11,color:C.sub}}>{s[0]}</div>
+      </div>})}
+    </div>
+    <h3 style={{fontSize:15,fontWeight:700,marginBottom:10}}>Organisaties</h3>
+    {orgs.map(function(org){
+      var orgUsers=allUsers.filter(function(u){return u.orgId===org.id});
+      var sub=subs.find(function(s){return s.id===org.id||s.orgId===org.id});
+      var plan=sub?PLANS.find(function(p){return p.id===sub.plan}):null;
+      var expired=sub?.status==="trial"&&sub.trialEnd&&new Date(sub.trialEnd)<new Date();
+      return <div key={org.id} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div><div style={{fontSize:15,fontWeight:700}}>{org.name||"Geen naam"}</div><div style={{fontSize:11,color:C.dim}}>{org.type||"Onbekend type"} · ID: {org.id.slice(0,8)}...</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            {plan&&<Tag c={plan.color} bg={plan.color+"15"}>{plan.name}</Tag>}
+            {sub?.status==="trial"&&!expired&&<Tag c="#d97706" bg="#fef3c7">Trial</Tag>}
+            {expired&&<Tag c="#dc2626" bg="#fef2f2">Verlopen</Tag>}
+            {sub?.status==="active"&&<Tag c="#16a34a" bg="#f0fdf4">Actief</Tag>}
+            <button onClick={function(){setConfirm({title:"Organisatie verwijderen?",msg:"Dit verwijdert "+org.name+", alle meldingen, facturen, accounts en "+orgUsers.length+" gebruiker(s). Dit kan niet ongedaan worden!",action:function(){deleteOrg(org.id)}})}} style={{width:28,height:28,borderRadius:6,border:"1px solid #fecaca",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="delete" size={14} color="#dc2626"/></button>
+          </div>
+        </div>
+        {sub?.trialEnd&&<div style={{fontSize:11,color:C.dim,marginBottom:6}}>Trial tot: {fmtDate(sub.trialEnd)}</div>}
+        <div style={{fontSize:12,fontWeight:600,color:C.sub,marginBottom:4}}>Gebruikers ({orgUsers.length})</div>
+        {orgUsers.map(function(u){return <div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:"1px solid "+C.border}}>
+          <div style={{width:24,height:24,borderRadius:6,background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:C.accent}}>{u.avatar||"?"}</div>
+          <div style={{flex:1}}><span style={{fontSize:12,fontWeight:600}}>{u.name}</span><span style={{fontSize:11,color:C.dim,marginLeft:6}}>{u.email}</span></div>
+          <span style={{fontSize:10,color:C.dim,textTransform:"capitalize",marginRight:6}}>{u.role}</span>
+          <button onClick={function(){setConfirm({title:"Gebruiker verwijderen?",msg:"Verwijder "+u.name+" ("+u.email+") volledig uit het systeem, inclusief het Auth-account.",action:function(){deleteUser(u.id,u.email)}})}} style={{width:24,height:24,borderRadius:5,border:"1px solid #fecaca",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="delete" size={12} color="#dc2626"/></button>
+        </div>})}
+        {orgUsers.length===0&&<div style={{fontSize:11,color:C.dim}}>Geen gebruikers gevonden</div>}
+      </div>
+    })}
+    {orgs.length===0&&<div style={{textAlign:"center",padding:30,color:C.dim}}>Nog geen organisaties</div>}
+  </div>;
+};
+
+const Settings=({org,onUpd,onNotify,onNav})=>{
+  const[form,setForm]=useState({name:org.name,type:org.type});
+  const[notif,setNotif]=useState({push:true,email:true});
+  const Tog=({value,onChange,label})=><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid "+C.border}}><span style={{fontSize:13}}>{label}</span><button onClick={()=>onChange(!value)} style={{width:40,height:22,borderRadius:11,border:"none",cursor:"pointer",padding:2,background:value?C.accent:"#cbd5e1",display:"flex",alignItems:"center",justifyContent:value?"flex-end":"flex-start",transition:"all .2s"}}><div style={{width:18,height:18,borderRadius:9,background:"white",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}/></button></div>;
+  return <div style={{padding:"20px 16px",maxWidth:600}}>
+    <h1 style={{fontSize:24,fontWeight:800,margin:"0 0 16px"}}>Instellingen</h1>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>{[["floorplans","floor","Plattegronden"],["users","users","Gebruikers"],["billing","card","Abonnement"]].map(([pg,ic,lb])=><button key={pg} onClick={()=>onNav(pg)} style={{background:C.card,borderRadius:10,padding:14,border:"1px solid "+C.border,cursor:"pointer",display:"flex",alignItems:"center",gap:8,textAlign:"left"}}><Icon name={ic} size={16} color={C.accent}/><span style={{fontSize:12,fontWeight:600}}>{lb}</span></button>)}</div>
+    <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:14}}>
+      <h3 style={{fontSize:14,fontWeight:700,margin:"0 0 12px"}}>Organisatie</h3>
+      <Inp label="Naam" value={form.name} onChange={v=>setForm({...form,name:v})}/>
+      <div style={{marginTop:10}}><Sel label="Type" value={form.type} onChange={v=>setForm({...form,type:v})} options={[{v:"hospital",l:"Ziekenhuis"},{v:"care",l:"Zorginstelling"},{v:"hotel",l:"Hotel"}]}/></div>
+      <div style={{marginTop:12}}><Btn onClick={()=>{onUpd({...org,...form});onNotify({title:"Opgeslagen",type:"success"})}} sm>Opslaan</Btn></div>
+    </div>
+    <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:14}}>
+      <h3 style={{fontSize:14,fontWeight:700,margin:"0 0 10px"}}>Notificaties</h3>
+      <Tog label="Push (GSM/Tablet)" value={notif.push} onChange={v=>setNotif({...notif,push:v})}/>
+      <Tog label="E-mail" value={notif.email} onChange={v=>setNotif({...notif,email:v})}/>
+    </div>
+    <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><Icon name="shield" size={18} color={C.accent}/><h3 style={{fontSize:14,fontWeight:700,margin:0}}>Beveiliging & Juridisch</h3></div>
+      {["🔐 AES-256 encryptie","🛡️ AVG/GDPR conform","🔒 Data geïsoleerd per organisatie","⚖️ Belgisch Auteursrecht beschermd","🇪🇺 EU-richtlijn 2009/24/EG"].map((t,i)=><div key={i} style={{fontSize:12,color:C.sub,padding:"6px 0",borderBottom:i<4?"1px solid "+C.border:"none"}}>{t}</div>)}
+      <div style={{marginTop:10,fontSize:10,color:C.dim,lineHeight:1.5}}>© {new Date().getFullYear()} TechMeld™ — Bijberoep · Genk, België<br/>Ondernemingsnummer: BE0XXX.XXX.XXX</div>
+    </div>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// CAPTCHA
+// ═══════════════════════════════════════════
+const Captcha=({onVerify,verified})=>{
+  const[nums]=useState(()=>{const a=Math.floor(Math.random()*10)+1;const b=Math.floor(Math.random()*10)+1;return{a,b,answer:a+b}});
+  const[input,setInput]=useState("");
+  const[wrong,setWrong]=useState(false);
+  const[dragged,setDragged]=useState(0);
+  const[dragging,setDragging]=useState(false);
+  const barRef=useRef(null);
+  const THRESHOLD=85;// percentage to reach
+
+  const startDrag=(clientX)=>{
+    setDragging(true);setWrong(false);
+    const move=(e2)=>{
+      const cx=e2.touches?e2.touches[0].clientX:e2.clientX;
+      const bar=barRef.current;if(!bar)return;
+      const rect=bar.getBoundingClientRect();
+      const pct=Math.min(100,Math.max(0,((cx-rect.left)/(rect.width))*100));
+      setDragged(pct);
+    };
+    const end=()=>{
+      setDragging(false);
+      document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',end);
+      document.removeEventListener('touchmove',move);document.removeEventListener('touchend',end);
+    };
+    document.addEventListener('mousemove',move);document.addEventListener('mouseup',end);
+    document.addEventListener('touchmove',move,{passive:true});document.addEventListener('touchend',end);
+  };
+
+  useEffect(()=>{
+    if(dragged>=THRESHOLD&&!verified){
+      onVerify(true);
+    }else if(dragged>0&&dragged<THRESHOLD&&!dragging){
+      // spring back
+      setDragged(0);
+    }
+  },[dragged,dragging]);
+
+  if(verified)return <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#f0fdf4",borderRadius:8,border:"1px solid #bbf7d0"}}>
+    <div style={{width:22,height:22,borderRadius:11,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={14} color="white"/></div>
+    <span style={{fontSize:12,fontWeight:600,color:"#16a34a"}}>Verificatie geslaagd</span>
+  </div>;
+
+  return <div style={{borderRadius:8,border:"1px solid "+C.border,overflow:"hidden",background:"#f8fafc"}}>
+    <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
+      <div style={{width:20,height:20,borderRadius:4,background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="shield" size={12} color={C.sub}/></div>
+      <span style={{fontSize:12,fontWeight:600,color:C.text}}>Ik ben geen robot</span>
+    </div>
+    {/* Slider */}
+    <div ref={barRef} style={{position:"relative",height:40,margin:"0 14px 10px",background:"#e2e8f0",borderRadius:8,cursor:"pointer",overflow:"hidden",userSelect:"none",touchAction:"none"}}>
+      {/* Track fill */}
+      <div style={{position:"absolute",left:0,top:0,bottom:0,width:dragged+"%",background:dragged>=THRESHOLD?"#16a34a":"linear-gradient(90deg,#2563eb,#7c3aed)",borderRadius:8,transition:dragging?"none":"width .3s ease"}}/>
+      {/* Label */}
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:dragged>40?"white":C.sub,pointerEvents:"none",transition:"color .2s"}}>
+        {dragged>=THRESHOLD?"✓ Geverifieerd":"Schuif naar rechts →"}
+      </div>
+      {/* Thumb */}
+      <div 
+        onMouseDown={e=>{e.preventDefault();startDrag(e.clientX)}}
+        onTouchStart={e=>startDrag(e.touches[0].clientX)}
+        style={{
+          position:"absolute",left:"calc("+dragged+"% - 18px)",top:2,width:36,height:36,borderRadius:7,
+          background:"white",border:"2px solid "+(dragged>=THRESHOLD?"#16a34a":C.accent),
+          display:"flex",alignItems:"center",justifyContent:"center",
+          cursor:"grab",boxShadow:"0 2px 8px rgba(0,0,0,.12)",
+          transition:dragging?"none":"left .3s ease",
+          touchAction:"none",
+        }}>
+        <span style={{fontSize:14}}>{dragged>=THRESHOLD?"✓":"⟩⟩"}</span>
+      </div>
+    </div>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
+// LEGAL DOCUMENTS
+// ═══════════════════════════════════════════
+const LEGAL_DOCS={
+voorwaarden:{title:"Algemene Voorwaarden",content:"Artikel 1 \u2014 Definities\nIn deze Algemene Voorwaarden wordt verstaan onder:\n\u2022 \"TechMeld\": de handelsnaam waaronder de dienstverlener opereert, gevestigd te Genk, Belgi\u00eb.\n\u2022 \"Platform\": de webapplicatie beschikbaar via techmeld.eu en techmeld.web.app.\n\u2022 \"Klant\": de rechtspersoon of natuurlijke persoon die een account aanmaakt.\n\u2022 \"Gebruiker\": iedere persoon die door de Klant toegang krijgt tot het Platform.\n\u2022 \"Melding\": een in het Platform aangemaakt onderhoudsverzoek of storingsmelding.\n\u2022 \"Abonnement\": het gekozen betaalplan (Starter, Professional of Enterprise).\n\u2022 \"Proefperiode\": de gratis periode van 14 kalenderdagen na registratie.\n\nArtikel 2 \u2014 Toepasselijkheid\n2.1. Deze Algemene Voorwaarden zijn van toepassing op elk gebruik van het Platform.\n2.2. Door het aanmaken van een account aanvaardt de Klant deze voorwaarden uitdrukkelijk.\n2.3. Afwijkingen zijn slechts geldig indien schriftelijk overeengekomen.\n2.4. TechMeld kan deze voorwaarden wijzigen met 30 dagen voorafgaande kennisgeving per e-mail.\n\nArtikel 3 \u2014 Dienstverlening\n3.1. TechMeld biedt een online platform voor facility management.\n3.2. TechMeld streeft naar 99% beschikbaarheid op jaarbasis.\n3.3. TechMeld mag het Platform verbeteren zonder voorafgaande kennisgeving.\n\nArtikel 4 \u2014 Account en Registratie\n4.1. De Klant dient correcte en actuele gegevens te verstrekken.\n4.2. De Klant is verantwoordelijk voor het geheimhouden van inloggegevens.\n4.3. De Klant dient TechMeld te informeren bij ongeautoriseerd gebruik.\n4.4. De Klant kan Gebruikers uitnodigen en hun rechten beheren.\n\nArtikel 5 \u2014 Proefperiode en Abonnementen\n5.1. Nieuwe Klanten ontvangen 14 dagen gratis proefperiode.\n5.2. Na de proefperiode dient een betaald abonnement gekozen te worden.\n5.3. Prijzen zijn exclusief 21% BTW.\n5.4. Jaarabonnementen worden vooraf gefactureerd.\n5.5. Prijswijzigingen worden 30 dagen vooraf medegedeeld.\n\nArtikel 6 \u2014 Betaling\n6.1. Betaling via PayPal of bankoverschrijving (BE05 9531 0129 8075, BIC: GEBABEBB).\n6.2. Facturen dienen binnen 14 dagen voldaan te worden.\n6.3. Bij niet-tijdige betaling kan toegang worden opgeschort na herinnering.\n\nArtikel 7 \u2014 Intellectueel Eigendom\n7.1. Alle intellectuele eigendomsrechten berusten bij TechMeld.\n7.2. Het abonnement verleent een niet-exclusief, niet-overdraagbaar gebruiksrecht.\n7.3. Kopi\u00ebren, reverse-engineeren of decompileren is niet toegestaan.\n7.4. De Klant behoudt rechten op eigen ingevoerde data.\n\nArtikel 8 \u2014 Data en Privacy\n8.1. TechMeld verwerkt gegevens conform AVG/GDPR.\n8.2. Specifieke verwerkingsactiviteiten staan in de Privacyverklaring.\n8.3. Klantdata wordt ge\u00efsoleerd opgeslagen per organisatie.\n8.4. Bij be\u00ebindiging heeft de Klant 30 dagen voor data-export.\n\nArtikel 9 \u2014 Aansprakelijkheid\n9.1. TechMeld garandeert geen ononderbroken werking.\n9.2. Aansprakelijkheid is beperkt tot het bedrag betaald in de afgelopen 12 maanden.\n9.3. Niet aansprakelijk voor indirecte schade of gevolgschade.\n9.4. Niet aansprakelijk bij overmacht.\n\nArtikel 10 \u2014 Opzegging\n10.1. Opzeggen kan via het Platform of per e-mail (info@techmeld.eu).\n10.2. Maandabonnementen eindigen einde lopende maand.\n10.3. Reeds betaalde bedragen worden niet gerestitueerd.\n10.4. TechMeld kan opzeggen bij ernstige schending (30 dagen opzegtermijn).\n\nArtikel 11 \u2014 Toepasselijk Recht\nBelgisch recht is van toepassing. Bevoegde rechtbank: arrondissement Limburg (Belgi\u00eb).\n\nContact: TechMeld \u00b7 Genk, Belgi\u00eb \u00b7 info@techmeld.eu"},
+privacy:{title:"Privacyverklaring",content:"1. Inleiding\nTechMeld, gevestigd te Genk, Belgi\u00eb, hecht groot belang aan de bescherming van uw persoonsgegevens.\n\n2. Verwerkingsverantwoordelijke\nTechMeld \u00b7 Genk, Belgi\u00eb \u00b7 info@techmeld.eu\n\n3. Welke gegevens verzamelen wij?\n\u2022 Accountgegevens: Naam, e-mailadres, wachtwoord (versleuteld), organisatienaam, rol.\n\u2022 Gebruiksgegevens: Meldingen, foto's, reacties, toewijzingen.\n\u2022 Technische gegevens: IP-adres, browsertype, apparaatinfo, FCM-tokens.\n\u2022 Facturatiegegevens: Klantnummer, facturen, BTW-nummer.\n\n4. Waarom verzamelen wij deze gegevens?\n\u2022 Uitvoering van de overeenkomst (art. 6.1.b AVG): Account, dienstverlening, notificaties, facturatie.\n\u2022 Wettelijke verplichting (art. 6.1.c AVG): Facturen bewaren (7 jaar).\n\u2022 Gerechtvaardigd belang (art. 6.1.f AVG): Platform verbeteren en beveiligen.\n\n5. Met wie delen wij uw gegevens?\n\u2022 Google Firebase (hosting, authenticatie, database) \u2014 EU servers\n\u2022 PayPal (betalingsverwerking) \u2014 alleen bij PayPal-betaling\n\u2022 Wij verkopen uw gegevens nooit aan derden.\n\n6. Bewaartermijnen\n\u2022 Accountgegevens: zolang account actief + 30 dagen\n\u2022 Facturatiegegevens: 7 jaar (wettelijke verplichting)\n\u2022 Technische loggegevens: maximaal 90 dagen\n\n7. Beveiliging\n\u2022 Versleutelde verbindingen (HTTPS/TLS)\n\u2022 Versleutelde wachtwoorden (Firebase Authentication)\n\u2022 Data-isolatie per organisatie\n\u2022 Rolgebaseerde toegangscontrole\n\n8. Uw rechten (AVG/GDPR)\nRecht op inzage, rectificatie, verwijdering, beperking, dataportabiliteit en bezwaar.\nE-mail: info@techmeld.eu\n\n9. Klachten\nBelgische Gegevensbeschermingsautoriteit (GBA)\nDrukpersstraat 35, 1000 Brussel\n+32 (0)2 274 48 00 \u00b7 contact@apd-gba.be"},
+cookies:{title:"Cookiebeleid",content:"1. Wat zijn cookies?\nCookies zijn kleine tekstbestanden die op uw apparaat worden opgeslagen.\n\n2. Welke cookies gebruiken wij?\n\nStrikt noodzakelijke cookies:\n\u2022 Firebase Authentication sessie-cookie (sessieduur)\n\u2022 Firebase Firestore cache (persistent)\n\nFunctionele cookies:\n\u2022 FCM-token opslag (voor push notificaties, tot uitloggen)\n\u2022 Service Worker cache (voor offline gebruik PWA)\n\nAnalytische cookies:\nTechMeld maakt momenteel geen gebruik van analytische cookies of tracking.\n\n3. Cookies van derden\n\u2022 Google/Firebase: voor authenticatie en database\n\u2022 PayPal: alleen bij PayPal-betaling\n\n4. Cookies beheren\nU kunt cookies beheren via uw browserinstellingen.\nLet op: blokkeren van noodzakelijke cookies kan het Platform be\u00efnvloeden.\n\n5. Contact\nVragen? info@techmeld.eu"}};
+
+const LegalModal=({doc,onClose})=>{
+  if(!doc)return null;var d=LEGAL_DOCS[doc];if(!d)return null;
+  return <div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={function(e){e.stopPropagation()}} style={{background:"#fff",borderRadius:16,maxWidth:600,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 40px rgba(0,0,0,.2)"}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+        <h2 style={{fontSize:16,fontWeight:700,margin:0}}>{d.title}</h2>
+        <button onClick={onClose} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.border,background:"#f8fafc",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+      </div>
+      <div style={{padding:"16px 20px",overflow:"auto",flex:1}}>
+        <pre style={{fontFamily:"Calibri,sans-serif",fontSize:12,lineHeight:1.7,color:C.text,whiteSpace:"pre-wrap",wordWrap:"break-word",margin:0}}>{d.content}</pre>
+      </div>
+      <div style={{padding:"12px 20px",borderTop:"1px solid "+C.border,flexShrink:0,textAlign:"right"}}>
+        <Btn onClick={onClose} sm>Sluiten</Btn>
+      </div>
+    </div>
+  </div>;
+};
+
+const CookieBanner=()=>{
+  const[show,setShow]=useState(function(){try{return !localStorage.getItem("tm_cookies")}catch(e){return true}});
+  const[legalDoc,setLegalDoc]=useState(null);
+  if(!show)return null;
+  var accept=function(){try{localStorage.setItem("tm_cookies","1")}catch(e){}setShow(false)};
+  return <>{legalDoc&&<LegalModal doc={legalDoc} onClose={function(){setLegalDoc(null)}}/>}
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9998,padding:"12px 16px",paddingBottom:"calc(12px + env(safe-area-inset-bottom))"}}>
+      <div style={{maxWidth:600,margin:"0 auto",background:"#1e293b",borderRadius:14,padding:"16px 18px",boxShadow:"0 -4px 20px rgba(0,0,0,.2)",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:200}}>
+          <div style={{fontSize:12,fontWeight:600,color:"white",marginBottom:3}}>Cookies</div>
+          <div style={{fontSize:10,color:"#94a3b8",lineHeight:1.5}}>
+            TechMeld gebruikt essenti\u00eble cookies voor authenticatie en de werking van het platform.{" "}
+            <span onClick={function(){setLegalDoc("cookies")}} style={{color:"#60a5fa",cursor:"pointer",textDecoration:"underline"}}>Cookiebeleid</span>
+          </div>
+        </div>
+        <button onClick={accept} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#2563eb",color:"white",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>Accepteren</button>
+      </div>
+    </div>
+  </>;
+};
+
+// ═══════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════
+const Auth=({onLogin})=>{
+  const[mode,setMode]=useState("login");const[form,setForm]=useState({email:"",pw:"",name:"",org:"",type:"hospital"});
+  const[busy,setBusy]=useState(false);const[ok,setOk]=useState(false);const[captchaOk,setCaptchaOk]=useState(false);
+  const[err,setErr]=useState("");const[legalDoc,setLegalDoc]=useState(null);const[resetSent,setResetSent]=useState(false);
+  const resetPw=async()=>{
+    if(!form.email){setErr("Vul eerst uw e-mailadres in.");return}
+    setErr("");setBusy(true);
+    try{
+      await auth.sendPasswordResetEmail(form.email);
+      setResetSent(true);
+    }catch(e){
+      var msg=e.code==="auth/user-not-found"?"Geen account gevonden met dit e-mailadres.":
+        e.code==="auth/invalid-email"?"Ongeldig e-mailadres.":
+        "Fout: "+e.message;
+      setErr(msg);
+    }
+    setBusy(false);
+  };
+  const go=async()=>{
+    if(mode==="register"&&(!ok||!captchaOk))return;
+    setErr("");setBusy(true);
+    try{
+      if(mode==="register"){
+        if(!form.name||!form.org||!form.email||!form.pw){setErr("Vul alle velden in.");setBusy(false);return}
+        if(form.pw.length<6){setErr("Wachtwoord moet minstens 6 tekens zijn.");setBusy(false);return}
+        await DB.register(form.email,form.pw,form.name,form.org,form.type);
+      }else{
+        if(!form.email||!form.pw){setErr("Vul e-mail en wachtwoord in.");setBusy(false);return}
+        await DB.login(form.email,form.pw);
+      }
+      onLogin();
+    }catch(e){
+      const msg=e.code==="auth/email-already-in-use"?"Dit e-mailadres is al in gebruik.":
+        e.code==="auth/invalid-email"?"Ongeldig e-mailadres.":
+        e.code==="auth/weak-password"?"Wachtwoord te zwak (min. 6 tekens).":
+        e.code==="auth/user-not-found"?"Geen account gevonden met dit e-mailadres.":
+        e.code==="auth/wrong-password"?"Onjuist wachtwoord.":
+        e.code==="auth/invalid-credential"?"Ongeldige inloggegevens.":
+        firebaseReady?("Fout: "+e.message):"";
+      setErr(msg);
+    }
+    setBusy(false);
+  };
+  const switchMode=(m)=>{setMode(m);setCaptchaOk(false);setErr("");setResetSent(false)};
+  return <>{legalDoc&&<LegalModal doc={legalDoc} onClose={function(){setLegalDoc(null)}}/>}<CookieBanner/><div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",background:"linear-gradient(155deg,#eff6ff 0%,#f8fafc 40%,#faf5ff 100%)",padding:"40px 16px",overflowY:"auto"}}>
+    <div style={{width:"100%",maxWidth:400,background:"#fff",borderRadius:20,border:"1px solid "+C.border,padding:"32px 24px",boxShadow:"0 16px 48px rgba(0,0,0,.06)",margin:"auto 0"}}>
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#2563eb,#7c3aed)",marginBottom:10,boxShadow:"0 6px 20px rgba(37,99,235,.2)"}}><Icon name="shield" size={24} color="white"/></div>
+        <h1 style={{fontSize:24,fontWeight:800,margin:0}}>TechMeld<sup style={{fontSize:9,color:C.accent}}>™</sup></h1>
+        <p style={{fontSize:12,color:C.dim,marginTop:3}}>Technische Dienst Management</p>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6,padding:"7px 10px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:6,marginBottom:16}}>
+        <Icon name="lock" size={13} color="#16a34a"/><span style={{fontSize:10,color:"#16a34a",fontWeight:500}}>End-to-end versleuteld · GDPR · Firebase EU</span>
+      </div>
+      {!firebaseReady&&<div style={{padding:"7px 10px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:6,marginBottom:12,fontSize:10,color:"#92400e"}}>⚠️ Demo-modus — Firebase config niet ingevuld. Data wordt lokaal opgeslagen.</div>}
+      {err&&<div style={{padding:"7px 10px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:6,marginBottom:12,fontSize:11,color:"#dc2626",fontWeight:500}}>{err}</div>}
+      <div style={{display:"flex",gap:3,marginBottom:16,background:"#f1f5f9",borderRadius:8,padding:2}}>
+        {[["login","Inloggen"],["register","Registreren"]].map(([k,l])=><button key={k} onClick={()=>switchMode(k)} style={{flex:1,padding:"7px 0",borderRadius:6,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:mode===k?C.accent:"transparent",color:mode===k?"#fff":C.dim,transition:"all .15s"}}>{l}</button>)}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {mode==="register"&&<><Inp label="Naam" value={form.name} onChange={v=>setForm({...form,name:v})} placeholder="Jan De Smet"/><Inp label="Organisatie" value={form.org} onChange={v=>setForm({...form,org:v})} placeholder="Sint-Jozef Ziekenhuis"/>
+          <div><label style={{fontSize:12,color:C.sub,display:"block",marginBottom:4,fontWeight:600}}>Type</label><div style={{display:"flex",gap:4}}>{[["hospital","Ziekenhuis"],["care","Zorginstelling"],["hotel","Hotel"]].map(([v,l])=><button key={v} onClick={()=>setForm({...form,type:v})} style={{flex:1,padding:"7px",borderRadius:6,cursor:"pointer",border:"1px solid "+(form.type===v?C.accent:C.border),background:form.type===v?C.accentBg:"transparent",color:form.type===v?C.accent:C.sub,fontSize:11,fontWeight:600}}>{l}</button>)}</div></div>
+        </>}
+        <Inp label="E-mail" type="email" value={form.email} onChange={v=>setForm({...form,email:v})} placeholder="naam@organisatie.be"/>
+        <Inp label="Wachtwoord" type="password" value={form.pw} onChange={v=>setForm({...form,pw:v})} placeholder="••••••••"/>
+        {mode==="login"&&<div style={{textAlign:"right",marginTop:-4}}>
+          <span onClick={resetPw} style={{fontSize:10,color:C.accent,cursor:"pointer",fontWeight:500}}>Wachtwoord vergeten?</span>
+        </div>}
+        {resetSent&&<div style={{padding:"9px 12px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,fontSize:11,color:"#16a34a",fontWeight:500}}>
+          ✓ Er is een e-mail verstuurd naar {form.email} met een link om uw wachtwoord opnieuw in te stellen.
+        </div>}
+        {mode==="register"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,padding:"7px 10px",background:"#f8fafc",borderRadius:6,border:"1px solid "+C.border}}>
+          <input type="checkbox" checked={ok} onChange={e=>setOk(e.target.checked)} style={{marginTop:2,accentColor:C.accent,cursor:"pointer",width:15,height:15,flexShrink:0}}/>
+          <label style={{fontSize:10,color:C.sub,lineHeight:1.4,cursor:"pointer"}}>Ik ga akkoord met de <span onClick={function(e){e.preventDefault();setLegalDoc("voorwaarden")}} style={{color:C.accent,fontWeight:600,textDecoration:"underline",cursor:"pointer"}}>Algemene Voorwaarden</span>, het <span onClick={function(e){e.preventDefault();setLegalDoc("privacy")}} style={{color:C.accent,fontWeight:600,textDecoration:"underline",cursor:"pointer"}}>Privacybeleid</span> en het <span onClick={function(e){e.preventDefault();setLegalDoc("cookies")}} style={{color:C.accent,fontWeight:600,textDecoration:"underline",cursor:"pointer"}}>Cookiebeleid</span>.</label>
+        </div>}
+        {mode==="register"&&<Captcha onVerify={setCaptchaOk} verified={captchaOk}/>}
+        <div style={{padding:"9px 12px",background:"#eff6ff",borderRadius:8,border:"1px solid #bfdbfe",display:"flex",alignItems:"center",gap:8}}>
+          <Icon name="star" size={16} color="#2563eb"/>
+          <div><div style={{fontSize:12,fontWeight:700}}>Gratis starten!</div><div style={{fontSize:10,color:C.sub}}>14 dagen gratis proberen · Daarna betaald abonnement</div></div>
+        </div>
+        <Btn onClick={go} disabled={busy||(mode==="register"&&(!ok||!captchaOk))} sx={{width:"100%",padding:"10px",fontSize:13,marginTop:2}}>
+          {busy?"⟳ Even geduld...":mode==="login"?"Inloggen":"Gratis starten →"}
+        </Btn>
+      </div>
+      <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid "+C.border,textAlign:"center"}}>
+        <div style={{fontSize:9,color:C.dim}}>© {new Date().getFullYear()} TechMeld™ — Bijberoep · Genk, België</div>
+      </div>
+    </div>
+  </div></>;
+};
+
+// ═══════════════════════════════════════════
+// APP
+// ═══════════════════════════════════════════
+function App(){
+  const[authed,setAuthed]=useState(false);const[store,setStore]=useState(mkStore);
+  const[page,setPage]=useState(function(){try{return sessionStorage.getItem("tm_page")||"dashboard"}catch(e){return"dashboard"}});const[detId,setDetId]=useState(null);
+  const[toasts,setToasts]=useState([]);const[loading,setLoading]=useState(true);
+  const[appLegalDoc,setAppLegalDoc]=useState(null);
+  const[orgId,setOrgId]=useState(null);
+
+  // Firebase Auth State Listener
+  useEffect(()=>{
+    if(!firebaseReady){setLoading(false);return}
+    const unsub=auth.onAuthStateChanged(async(user)=>{
+      if(user){
+        try{
+          const profile=await DB.getUserProfile(user.uid);
+          var isSA=SUPER_ADMINS.includes(user.email);
+          if(isSA){
+            // Super admin — no org needed
+            setStore(p=>({...p,curUser:{id:user.uid,name:profile?.name||user.displayName||"Admin",email:user.email,role:"superadmin",av:profile?.avatar||(user.displayName||"A").slice(0,2).toUpperCase()}}));
+            setAuthed(true);setPage("admin");
+          }else if(profile&&profile.orgId){
+            setOrgId(profile.orgId);
+            setStore(p=>({...p,curUser:{id:user.uid,name:profile.name||user.displayName,email:user.email,role:profile.role||"admin",av:profile.avatar||"U"}}));
+            setAuthed(true);
+          }else{
+            // New user without profile yet — set basic info
+            setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||"Gebruiker",email:user.email,role:"admin",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
+            setAuthed(true);
+          }
+        }catch(e){
+          console.error("Profile load error:",e);
+          setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||user.email?.split("@")[0]||"Gebruiker",email:user.email,role:"admin",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
+          setAuthed(true);
+        }
+      }else{
+        setAuthed(false);setOrgId(null);
+      }
+      setLoading(false);
+    });
+    return()=>unsub();
+  },[]);
+
+  // Real-time listeners for Firebase data
+  useEffect(()=>{
+    if(!firebaseReady||!orgId)return;
+    const unsubs=[];
+    // Listen to organization changes
+    unsubs.push(DB.listenOrg(orgId,(org)=>{
+      // Backward compatibility: migrate to multi-building if no buildings exist
+      if(!org.buildings||org.buildings.length===0){
+        const defBId="b_default";
+        org.buildings=[{id:defBId,name:org.name||"Gebouw"}];
+        if(org.floors){org.floors=org.floors.map(f=>f.bId?f:{...f,bId:defBId})}
+        DB.updateOrg(orgId,{buildings:org.buildings,floors:org.floors}).catch(e=>console.error("Migration error:",e));
+      }
+      setStore(p=>({...p,org:{...p.org,...org,id:orgId}}));
+    }));
+    // Listen to meldingen
+    unsubs.push(DB.listenMeldingen(orgId,(meldingen)=>{
+      // Check for new meldingen and show push notification
+      if(store.curUser)PushNotify.checkNew(meldingen,store.curUser.id);
+      setStore(p=>({...p,meldingen}));
+    }));
+    // Listen to users
+    unsubs.push(DB.listenUsers(orgId,(users)=>{
+      setStore(p=>({...p,users}));
+    }));
+    // Listen to subscription
+    unsubs.push(DB.listenSubscription(orgId,(sub)=>{
+      setStore(p=>({...p,sub:sub}));
+    }));
+    return()=>unsubs.forEach(u=>u());
+  },[orgId]);
+
+  // Register FCM token for push notifications (only if already granted)
+  useEffect(()=>{
+    if(!authed||!orgId||!store.curUser)return;
+    window.__tmUserId=store.curUser.id;window.__tmOrgId=orgId;
+    if(PushNotify.permission==='granted'){
+      PushNotify.getFCMToken().then(function(token){
+        if(token){DB.saveFCMToken(store.curUser.id,orgId,token);console.log('Push notifications enabled')}
+      });
+    }
+  },[authed,orgId,store.curUser?.id]);
+
+  // Fallback: set curUser in demo mode
+  useEffect(()=>{if(authed&&!store.curUser&&!firebaseReady)setStore(p=>({...p,curUser:p.users[0]}))},[authed]);
+
+  const notify=useCallback(({title,msg="",type="info"})=>{const id=uid();setToasts(p=>[...p,{id,title,msg,type}]);setTimeout(()=>setToasts(p=>p.filter(n=>n.id!==id)),4000)},[]);
+  const nav=useCallback((pg,id=null)=>{setPage(pg);if(id)setDetId(id);try{sessionStorage.setItem("tm_page",pg)}catch(e){}},[]);
+
+  const updMel=useCallback(u=>{
+    setStore(p=>({...p,meldingen:p.meldingen.map(m=>m.id===u.id?u:m)}));
+    if(orgId)DB.updateMelding(orgId,u).catch(e=>console.error("Update error:",e));
+  },[orgId]);
+
+  const addMel=useCallback(m=>{
+    // Check meldingen limit
+    const plan=PLANS.find(p=>p.id===(store.sub?.plan||"starter"));
+    if(plan&&plan.meldingenMax<999){
+      const activeMel=store.meldingen.filter(x=>x.status!=="closed").length;
+      if(activeMel>=plan.meldingenMax){
+        notify({title:"Limiet bereikt",msg:"Uw "+plan.name+" plan staat max "+plan.meldingenMax+" actieve meldingen toe. Upgrade voor onbeperkt.",type:"error"});
+        return;
+      }
+    }
+    PushNotify.knownIds.add(m.id);
+    setStore(p=>({...p,meldingen:[m,...p.meldingen]}));
+    if(orgId)DB.addMelding(orgId,m).catch(e=>console.error("Add error:",e));
+    const assigned=m.to?store.users.find(u=>u.id===m.to):null;
+    var pushMsg=PushNotify.permission==='granted'?'Push notificatie verstuurd naar alle apparaten':'Push niet actief — schakel notificaties in';
+    setTimeout(()=>notify({title:"📱 "+pushMsg,msg:assigned?'"'+m.title+'" → '+assigned.name:'"'+m.title+'" → alle technici',type:PushNotify.permission==='granted'?"success":"info"}),500);
+  },[notify,orgId,store.users,store.sub,store.meldingen]);
+
+  const selPlan=(id,method,billing)=>{
+    const now=new Date();
+    const expiresAt=new Date(now);
+    if(billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
+    const newSub={...store.sub,plan:id,status:"active",billing:billing||"month",expiresAt:expiresAt.toISOString(),activatedAt:now.toISOString()};
+    setStore(p=>({...p,sub:newSub}));
+    if(orgId){
+      DB.updateSubscription(orgId,{plan:id,status:"active",billing:billing||"month",expiresAt:expiresAt.toISOString(),activatedAt:now.toISOString()}).catch(e=>console.error(e));
+      // Save invoice
+      const plan=PLANS.find(p=>p.id===id);
+      const price=billing==="year"?plan.yearPrice:plan.price;
+      DB.addInvoice(orgId,{plan:plan.name,amount:price,billing,method,status:"betaald",date:new Date().toISOString()}).catch(e=>console.error(e));
+    }
+  };
+
+  const handleLogout=async()=>{
+    try{await DB.logout()}catch(e){}
+    setAuthed(false);setOrgId(null);setStore(mkStore());setPage("dashboard");
+  };
+
+  // Loading screen
+  if(loading)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg}}>
+    <div style={{textAlign:"center"}}>
+      <div style={{width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#2563eb,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12,animation:"fadeIn .5s"}}><Icon name="shield" size={24} color="white"/></div>
+      <div style={{fontSize:14,fontWeight:600,color:C.text}}>TechMeld™ laden...</div>
+    </div>
+  </div>;
+
+  if(!authed)return <Auth onLogin={()=>{if(!firebaseReady)setAuthed(true)}}/>;
+  if(!store.curUser)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg}}>
+    <div style={{textAlign:"center"}}>
+      <div style={{fontSize:14,fontWeight:600,color:C.text}}>Profiel laden...</div>
+    </div>
+  </div>;
+
+  // Trial expiration check
+  const isSuperAdmin=SUPER_ADMINS.includes(store.curUser?.email);
+  const trialExpired=!isSuperAdmin&&store.sub?.status==="trial"&&store.sub.trialEnd&&new Date(store.sub.trialEnd)<new Date();
+  if(trialExpired&&page!=="billing"){
+    return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,padding:20}}>
+      <div style={{background:C.card,borderRadius:20,border:"1px solid "+C.border,padding:"40px 30px",maxWidth:460,textAlign:"center",boxShadow:"0 8px 30px rgba(0,0,0,.06)"}}>
+        <div style={{width:64,height:64,borderRadius:16,background:"linear-gradient(135deg,#fef3c7,#fde68a)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+          <Icon name="time" size={32} color="#d97706"/>
+        </div>
+        <h2 style={{fontSize:22,fontWeight:800,margin:"0 0 8px"}}>Proefperiode verlopen</h2>
+        <p style={{fontSize:14,color:C.sub,lineHeight:1.6,margin:"0 0 8px"}}>Uw gratis proefperiode van 14 dagen is afgelopen.</p>
+        <p style={{fontSize:13,color:C.sub,lineHeight:1.6,margin:"0 0 24px"}}>Kies een abonnement om TechMeld te blijven gebruiken. Al uw data en meldingen zijn bewaard.</p>
+        <Btn onClick={function(){setPage("billing")}} sx={{padding:"12px 32px",fontSize:15,width:"100%"}}>Abonnement kiezen</Btn>
+        <button onClick={handleLogout} style={{marginTop:14,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:12}}>Uitloggen</button>
+      </div>
+    </div>;
+  }
+
+  // Paid subscription expiration check
+  const subExpired=!isSuperAdmin&&store.sub?.status==="active"&&store.sub.plan!=="starter"&&store.sub.expiresAt&&new Date(store.sub.expiresAt)<new Date();
+  if(subExpired&&page!=="billing"){
+    return <SubExpiredScreen sub={store.sub} onRenew={function(){setPage("billing")}} onLogout={handleLogout}/>;
+  }
+
+  const cur=detId?store.meldingen.find(m=>m.id===detId):null;
+
+  var curPerms=store.curUser?.perms||DEFAULT_PERMS[store.curUser?.role]||DEFAULT_PERMS.admin;
+  const pg=()=>{
+    // Super admin — always show Admin Panel
+    if(isSuperAdmin)return <AdminPanel curUser={store.curUser}/>;
+    // Permission check — redirect to dashboard if no access
+    if(page!=="detail"&&page!=="billing"&&page!=="admin"&&page!=="dashboard"&&!curPerms.includes(page)){
+      return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+    }
+    if(page==="detail"&&cur)return <Detail mel={cur} org={store.org} users={store.users} cur={store.curUser} onBack={()=>nav("meldingen")} onUpdate={updMel} onNotify={notify}/>;
+    if(page==="billing")return <Pricing sub={store.sub} onSelect={selPlan} onBack={()=>nav("dashboard")} onNotify={notify}/>;
+    switch(page){
+      case"dashboard":return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+      case"meldingen":return <MeldingenList mel={store.meldingen} org={store.org} sub={store.sub} onNav={nav}/>;
+      case"new":return <NewMeld org={store.org} users={store.users} cur={store.curUser} sub={store.sub} onSubmit={addMel} onNav={nav} onNotify={notify}/>;
+      case"building":return <Building org={store.org} sub={store.sub} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{buildings:o.buildings||[],floors:o.floors,rooms:o.rooms}).catch(e=>console.error(e))}} onNotify={notify}/>;
+      case"floorplans":return <FloorPlans org={store.org} orgId={orgId} onNotify={notify}/>;
+      case"rapportage":return <Rapportage mel={store.meldingen} org={store.org} users={store.users} onNotify={notify}/>;
+      case"groep":return <GroepDashboard org={store.org} orgId={orgId} sub={store.sub} onNav={nav} onNotify={notify}/>;
+      case"locaties":return <LocatieBeheer org={store.org} orgId={orgId} onNotify={notify}/>;
+      case"vergelijk":return <VergelijkendeRapportage org={store.org} orgId={orgId} onNotify={notify}/>;
+      case"users":return <Users users={store.users} cur={store.curUser} orgId={orgId} sub={store.sub} onUpd={u=>setStore(p=>({...p,users:u}))} onNotify={notify}/>;
+      case"settings":return <Settings org={store.org} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{name:o.name,type:o.type}).catch(e=>console.error(e))}} onNotify={notify} onNav={nav}/>;
+      case"admin":return SUPER_ADMINS.includes(store.curUser?.email)?<AdminPanel curUser={store.curUser}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+      default:return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+    }
+  };
+
+  return <div className="app-shell" style={{display:"flex",height:"100vh",background:C.bg,overflow:"hidden"}}>
+    <Toast items={toasts} onDismiss={id=>setToasts(p=>p.filter(n=>n.id!==id))}/>
+    {appLegalDoc&&<LegalModal doc={appLegalDoc} onClose={function(){setAppLegalDoc(null)}}/>}
+    <Sidebar active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub}/>
+    <main className="main-content" style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{flex:1}}>{pg()}</div>
+      <div style={{padding:"8px 14px",borderTop:"1px solid "+C.border,textAlign:"center",flexShrink:0,background:"#fff"}}>
+        <div style={{fontSize:9,color:C.dim,display:"flex",alignItems:"center",justifyContent:"center",gap:5,flexWrap:"wrap"}}>
+          <span>© {new Date().getFullYear()} TechMeld™</span><span style={{color:"#e2e8f0"}}>·</span>
+          <span>Alle rechten voorbehouden</span><span style={{color:"#e2e8f0"}}>·</span>
+          <span style={{cursor:"pointer",color:C.accent}} onClick={function(){setAppLegalDoc("voorwaarden")}}>Voorwaarden</span><span style={{color:"#e2e8f0"}}>·</span>
+          <span style={{cursor:"pointer",color:C.accent}} onClick={function(){setAppLegalDoc("privacy")}}>Privacy</span>
+        </div>
+      </div>
+    </main>
+    <MobileNav active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub}/>
+  </div>;
+}
+ReactDOM.render(<App/>,document.getElementById('root'));
+</script>
+</body>
+</html>

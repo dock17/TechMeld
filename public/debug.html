@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head><title>TechMeld Debug</title>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body style="font-family:sans-serif;padding:40px">
+<h2>TechMeld Debug</h2>
+<div id="log" style="background:#f1f5f9;padding:20px;border-radius:8px;font-size:13px"></div>
+<script>
+const log = (msg) => { document.getElementById('log').innerHTML += msg + '<br>'; console.log(msg); };
+log('1. Script loaded');
+try {
+  const cfg = {apiKey:"AIzaSyXXXXXX",authDomain:"techmeld.firebaseapp.com",projectId:"techmeld"};
+  log('2. Checking Firebase...');
+  if(typeof firebase !== 'undefined') {
+    log('3. Firebase SDK loaded ✅');
+    const app = firebase.initializeApp(cfg);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    log('4. Firebase initialized ✅');
+    auth.onAuthStateChanged(user => {
+      if(user) {
+        log('5. User logged in: ' + user.email + ' (uid: ' + user.uid + ')');
+        db.collection('users').doc(user.uid).get().then(doc => {
+          if(doc.exists) log('6. Profile found ✅ orgId: ' + doc.data().orgId);
+          else log('6. ❌ NO PROFILE in Firestore for this user!');
+        }).catch(e => log('6. ❌ Firestore error: ' + e.message));
+      } else {
+        log('5. No user logged in');
+      }
+    });
+  } else {
+    log('3. ❌ Firebase SDK NOT loaded');
+  }
+} catch(e) { log('ERROR: ' + e.message); }
+</script>
+</body>
+</html>
