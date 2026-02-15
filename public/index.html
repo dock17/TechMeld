@@ -192,11 +192,11 @@ const DB = {
       avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    // Create subscription — Professional 14-day trial
+    // Create subscription — Starter 14-day trial
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + 14);
     await db.collection('subscriptions').doc(orgRef.id).set({
-      plan:"professional", status:"trial",
+      plan:"starter", status:"trial",
       trialEnd: firebase.firestore.Timestamp.fromDate(trialEnd),
       orgId: orgRef.id,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -397,7 +397,7 @@ const DEFAULT_PERMS={
   reporter:["dashboard","meldingen","new"]
 };
 const PLANS=[
-  {id:"starter",name:"Starter",price:29,yearPrice:Math.round(29*12*0.85),users:3,buildings:1,free:false,meldingenMax:10,features:["Tot 3 gebruikers","1 gebouw","Max 10 actieve meldingen","E-mail notificaties","Basis rapportage"],color:"#2563eb",pop:false},
+  {id:"starter",name:"Starter",price:29,yearPrice:Math.round(29*12*0.85),users:3,buildings:1,free:false,meldingenMax:10,features:["Tot 3 gebruikers","1 gebouw","Max 10 actieve meldingen","E-mail notificaties","Basis rapportage","14 dagen gratis proefperiode"],color:"#2563eb",pop:false},
   {id:"professional",name:"Professional",price:89,yearPrice:Math.round(89*12*0.85),users:20,buildings:5,free:false,meldingenMax:999,features:["Tot 20 gebruikers","5 gebouwen","Push + E-mail notificaties","Plattegronden uploaden","Uitgebreide rapportage","Prioriteits support","14 dagen gratis proefperiode"],color:"#7c3aed",pop:true},
   {id:"enterprise",name:"Enterprise",price:159,yearPrice:Math.round(159*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,features:["Onbeperkt gebruikers","Onbeperkt gebouwen","Alle functies","24/7 support","Custom integraties","SLA garantie"],color:"#0891b2",pop:false},
   {id:"groep",name:"Groepslicentie",price:129,yearPrice:Math.round(129*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,perLocatie:true,minLocaties:3,features:["Prijs per locatie","Centraal groepsdashboard","Onbeperkt gebruikers/locatie","Vergelijkende rapportage","Dedicated accountmanager","Volume korting vanaf 5+"],color:"#059669",pop:false,contact:true,volumeKorting:{5:0.10,10:0.15,20:0.20}},
@@ -498,9 +498,10 @@ const TrialBanner=({sub,onUp})=>{
   if(sub.status!=="trial")return null;
   const dl=Math.max(0,Math.ceil((new Date(sub.trialEnd)-new Date())/(864e5)));
   const pl=PLANS.find(p=>p.id===sub.plan);
-  return <div style={{background:"linear-gradient(135deg,#faf5ff,#eff6ff)",border:"1px solid #c4b5fd",borderRadius:12,padding:"12px 16px",margin:"0 0 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",animation:"fadeIn .4s"}}>
-    <div style={{width:38,height:38,borderRadius:10,background:"#ede9fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="time" size={20} color="#7c3aed"/></div>
-    <div style={{flex:1,minWidth:180}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{pl?.name||"Professional"} proefperiode — nog {dl} {dl===1?"dag":"dagen"}</div><div style={{fontSize:12,color:C.sub,marginTop:1}}>Probeer alle {pl?.name||"Professional"} functies gratis. Daarna kiest u een betaald abonnement.</div></div>
+  const clr=pl?.color||"#2563eb";
+  return <div style={{background:"linear-gradient(135deg,"+clr+"08,"+clr+"12)",border:"1px solid "+clr+"40",borderRadius:12,padding:"12px 16px",margin:"0 0 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",animation:"fadeIn .4s"}}>
+    <div style={{width:38,height:38,borderRadius:10,background:clr+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="time" size={20} color={clr}/></div>
+    <div style={{flex:1,minWidth:180}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{pl?.name||"Starter"} proefperiode — nog {dl} {dl===1?"dag":"dagen"}</div><div style={{fontSize:12,color:C.sub,marginTop:1}}>Probeer alle {pl?.name||"Starter"} functies gratis. Daarna kiest u een betaald abonnement.</div></div>
     <Btn onClick={onUp} sm>Abonnement kiezen</Btn>
   </div>;
 };
@@ -741,7 +742,7 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
         <div style={{fontSize:11,color:C.sub,marginTop:2}}>{isExpired?"Verleng uw abonnement om door te gaan":sub.expiresAt?"Geldig tot: "+new Date(sub.expiresAt).toLocaleDateString('nl-BE',{day:'numeric',month:'long',year:'numeric'})+(sub.billing==="year"?" (jaarabonnement)":" (maandabonnement)"):""}</div>
       </div>
     </div>}
-    <div style={{textAlign:"center",marginBottom:28}}><h1 style={{fontSize:26,fontWeight:800,margin:"0 0 6px"}}>Kies uw abonnement</h1><p style={{fontSize:13,color:C.sub}}>Alle plannen betaald · Maandelijks opzegbaar · 15% korting bij jaarabonnement</p>
+    <div style={{textAlign:"center",marginBottom:28}}><h1 style={{fontSize:26,fontWeight:800,margin:"0 0 6px"}}>Kies uw abonnement</h1><p style={{fontSize:13,color:C.sub}}>Starter en Professional 14 dagen gratis · Daarna betaald · 15% korting bij jaarabonnement</p>
       {/* Billing toggle */}
       <div style={{display:"inline-flex",alignItems:"center",gap:10,marginTop:16,padding:"4px",background:"#f1f5f9",borderRadius:10}}>
         <button onClick={()=>setBilling("month")} style={{padding:"8px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:billing==="month"?C.accent:"transparent",color:billing==="month"?"#fff":C.sub,transition:"all .15s"}}>Maandelijks</button>
@@ -765,8 +766,11 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
         <div style={{marginTop:14,padding:"7px",borderRadius:6,textAlign:"center",fontSize:11,fontWeight:600,background:sel===p.id?p.color:"#f1f5f9",color:sel===p.id?"#fff":C.sub,transition:"all .2s"}}>{sel===p.id?"✓ Geselecteerd":"Selecteren"}</div>
       </div>})}
     </div>
-    <div style={{textAlign:"center"}}>{plan.contact?<Btn onClick={()=>{window.location.href="mailto:info@techmeld.eu?subject=Groepslicentie%20aanvraag&body=Beste%20TechMeld%2C%0A%0AWij%20zijn%20ge%C3%AFnteresseerd%20in%20de%20Groepslicentie%20voor%20meerdere%20locaties.%0A%0AOrganisatie%3A%20%0AAantal%20locaties%3A%20%0A%0AMet%20vriendelijke%20groet";onNotify({title:"E-mail opent...",msg:"Stuur ons uw gegevens en wij maken een offerte op maat",type:"info"})}} sx={{padding:"11px 32px",fontSize:14,background:"#059669"}}>Offerte aanvragen</Btn>:<Btn onClick={()=>setStep("payment")} sx={{padding:"11px 32px",fontSize:14}}>{isExpired?"Abonnement verlengen":"Doorgaan naar betaling"}</Btn>}</div>
-    <div style={{textAlign:"center",marginTop:16,fontSize:11,color:C.dim}}>{plan.contact?"Wij maken een offerte op maat voor uw organisatie":"PayPal of Creditcard · Factuur per e-mail · Maandelijks opzegbaar"}</div>
+    <div style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>{plan.contact?<Btn onClick={()=>{window.location.href="mailto:info@techmeld.eu?subject=Groepslicentie%20aanvraag&body=Beste%20TechMeld%2C%0A%0AWij%20zijn%20ge%C3%AFnteresseerd%20in%20de%20Groepslicentie%20voor%20meerdere%20locaties.%0A%0AOrganisatie%3A%20%0AAantal%20locaties%3A%20%0A%0AMet%20vriendelijke%20groet";onNotify({title:"E-mail opent...",msg:"Stuur ons uw gegevens en wij maken een offerte op maat",type:"info"})}} sx={{padding:"11px 32px",fontSize:14,background:"#059669"}}>Offerte aanvragen</Btn>:<>
+      {sel==="professional"&&sub?.plan!=="professional"&&<Btn onClick={()=>{onSelect(sel,"trial","month");onNotify({title:"Professional proefperiode gestart!",msg:"14 dagen gratis alle Professional functies.",type:"success"})}} sx={{padding:"11px 32px",fontSize:14}}>14 dagen gratis proberen</Btn>}
+      <Btn onClick={()=>setStep("payment")} v={sel==="professional"&&sub?.plan!=="professional"?"secondary":undefined} sx={{padding:"11px 32px",fontSize:14}}>{isExpired?"Abonnement verlengen":"Doorgaan naar betaling"}</Btn>
+    </>}</div>
+    <div style={{textAlign:"center",marginTop:16,fontSize:11,color:C.dim}}>{plan.contact?"Wij maken een offerte op maat voor uw organisatie":sel==="professional"&&sub?.plan!=="professional"?"Eerst gratis proberen of direct betalen":"PayPal of Creditcard · Factuur per e-mail · Maandelijks opzegbaar"}</div>
   </div>;
 };
 
@@ -1930,8 +1934,8 @@ const Auth=({onLogin})=>{
         </div>}
         {mode==="register"&&<Captcha onVerify={setCaptchaOk} verified={captchaOk}/>}
         <div style={{padding:"9px 12px",background:"#eff6ff",borderRadius:8,border:"1px solid #bfdbfe",display:"flex",alignItems:"center",gap:8}}>
-          <Icon name="star" size={16} color="#7c3aed"/>
-          <div><div style={{fontSize:12,fontWeight:700,color:"#7c3aed"}}>Professional proefperiode</div><div style={{fontSize:10,color:C.sub}}>14 dagen gratis alle functies · Daarna betaald abonnement</div></div>
+          <Icon name="star" size={16} color="#2563eb"/>
+          <div><div style={{fontSize:12,fontWeight:700,color:"#2563eb"}}>Starter proefperiode</div><div style={{fontSize:10,color:C.sub}}>14 dagen gratis proberen · Daarna betaald abonnement</div></div>
         </div>
         <Btn onClick={go} disabled={busy||(mode==="register"&&(!ok||!captchaOk))} sx={{width:"100%",padding:"10px",fontSize:13,marginTop:2}}>
           {busy?"⟳ Even geduld...":mode==="login"?"Inloggen":"14 dagen gratis proberen →"}
@@ -2133,6 +2137,16 @@ function App(){
 
   const selPlan=(id,method,billing)=>{
     const now=new Date();
+    // Free trial for a plan (14 days)
+    if(method==="trial"){
+      const trialEnd=new Date(now);
+      trialEnd.setDate(trialEnd.getDate()+14);
+      const newSub={plan:id,status:"trial",trialEnd:trialEnd.toISOString()};
+      setStore(p=>({...p,sub:newSub}));
+      if(orgId)DB.updateSubscription(orgId,{plan:id,status:"trial",trialEnd:trialEnd.toISOString()}).catch(e=>console.error(e));
+      return;
+    }
+    // Paid subscription
     const expiresAt=new Date(now);
     if(billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
     const newSub={...store.sub,plan:id,status:"active",billing:billing||"month",expiresAt:expiresAt.toISOString(),activatedAt:now.toISOString()};
@@ -2173,15 +2187,18 @@ function App(){
   const isSuperAdmin=SUPER_ADMINS.includes(store.curUser?.email);
   const trialExpired=!isSuperAdmin&&(store.sub?.status==="trial"||store.sub?.status==="expired")&&store.sub.trialEnd&&new Date(store.sub.trialEnd)<new Date();
   if(trialExpired&&page!=="billing"){
+    const expPlan=PLANS.find(p=>p.id===store.sub?.plan);
+    const canTryPro=store.sub?.plan==="starter";
     return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,padding:20}}>
       <div style={{background:C.card,borderRadius:20,border:"1px solid "+C.border,padding:"40px 30px",maxWidth:460,textAlign:"center",boxShadow:"0 8px 30px rgba(0,0,0,.06)"}}>
         <div style={{width:64,height:64,borderRadius:16,background:"linear-gradient(135deg,#fef3c7,#fde68a)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
           <Icon name="time" size={32} color="#d97706"/>
         </div>
-        <h2 style={{fontSize:22,fontWeight:800,margin:"0 0 8px"}}>Proefperiode verlopen</h2>
-        <p style={{fontSize:14,color:C.sub,lineHeight:1.6,margin:"0 0 8px"}}>Uw gratis proefperiode van 14 dagen is afgelopen.</p>
+        <h2 style={{fontSize:22,fontWeight:800,margin:"0 0 8px"}}>{expPlan?.name||""} proefperiode verlopen</h2>
+        <p style={{fontSize:14,color:C.sub,lineHeight:1.6,margin:"0 0 8px"}}>Uw gratis {expPlan?.name||""} proefperiode van 14 dagen is afgelopen.</p>
         <p style={{fontSize:13,color:C.sub,lineHeight:1.6,margin:"0 0 24px"}}>Kies een abonnement om TechMeld te blijven gebruiken. Al uw data en meldingen zijn bewaard.</p>
-        <Btn onClick={function(){setPage("billing")}} sx={{padding:"12px 32px",fontSize:15,width:"100%"}}>Abonnement kiezen</Btn>
+        {canTryPro&&<Btn onClick={function(){selPlan("professional","trial","month");notify({title:"Professional proefperiode gestart!",msg:"14 dagen gratis alle Professional functies.",type:"success"})}} sx={{padding:"12px 32px",fontSize:15,width:"100%",background:"#7c3aed",marginBottom:10}}>Professional 14 dagen gratis proberen</Btn>}
+        <Btn onClick={function(){setPage("billing")}} v={canTryPro?"secondary":undefined} sx={{padding:"12px 32px",fontSize:15,width:"100%"}}>Abonnement kiezen</Btn>
         <button onClick={handleLogout} style={{marginTop:14,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:12}}>Uitloggen</button>
       </div>
     </div>;
