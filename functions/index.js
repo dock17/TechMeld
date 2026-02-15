@@ -194,3 +194,29 @@ exports.deleteUserAccount = onCall({region:"europe-west1"}, async(req)=>{
   const b=db.batch();t.forEach(d=>b.delete(d.ref));await b.commit();
   return{success:true};
 });
+
+exports.deleteOrganization = onCall({region:"europe-west1"}, async(req)=>{
+  const{orgId}=req.data;
+  if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
+  // Delete all users in this org (Auth + Firestore)
+  const usersSnap=await db.collection("users").where("orgId","==",orgId).get();
+  for(const doc of usersSnap.docs){
+    try{await admin.auth().deleteUser(doc.id);}catch(e){}
+    await doc.ref.delete();
+  }
+  // Delete subcollections: meldingen, invoices
+  const melSnap=await db.collection("organizations").doc(orgId).collection("meldingen").get();
+  const b1=db.batch();melSnap.forEach(d=>b1.delete(d.ref));await b1.commit();
+  const invSnap=await db.collection("organizations").doc(orgId).collection("invoices").get();
+  const b2=db.batch();invSnap.forEach(d=>b2.delete(d.ref));await b2.commit();
+  const fpSnap=await db.collection("organizations").doc(orgId).collection("floorplans").get();
+  const b3=db.batch();fpSnap.forEach(d=>b3.delete(d.ref));await b3.commit();
+  // Delete subscription
+  try{await db.collection("subscriptions").doc(orgId).delete();}catch(e){}
+  // Delete FCM tokens for org users
+  const tokSnap=await db.collection("fcmTokens").where("orgId","==",orgId).get();
+  const b4=db.batch();tokSnap.forEach(d=>b4.delete(d.ref));await b4.commit();
+  // Delete organization document
+  await db.collection("organizations").doc(orgId).delete();
+  return{success:true};
+});
