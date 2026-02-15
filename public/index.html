@@ -1663,6 +1663,11 @@ const AdminPanel=({curUser,onImpersonate})=>{
     else{await db.collection('organizations').doc(orgId).delete();}
     setConfirm(null);
   };
+  var resetSub=async function(orgId,plan){
+    var trialEnd=new Date();trialEnd.setDate(trialEnd.getDate()+14);
+    await db.collection('subscriptions').doc(orgId).set({plan:plan||"starter",status:"trial",trialEnd:firebase.firestore.Timestamp.fromDate(trialEnd),orgId:orgId},{merge:true});
+    setConfirm(null);
+  };
 
   const filteredOrgs=orgs.filter(o=>{const q=search.toLowerCase();if(!q)return true;const orgUsers=allUsers.filter(u=>u.orgId===o.id);return(o.name||"").toLowerCase().includes(q)||orgUsers.some(u=>(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q))});
   const activeTrials=subs.filter(s=>s.status==="trial"&&s.trialEnd&&new Date(s.trialEnd)>new Date()).length;
@@ -1720,6 +1725,7 @@ const AdminPanel=({curUser,onImpersonate})=>{
             {expired&&<Tag c="#dc2626" bg="#fef2f2">Verlopen</Tag>}
             {sub?.status==="active"&&<Tag c="#16a34a" bg="#f0fdf4">Actief</Tag>}
             <button onClick={function(){onImpersonate(org.id,org.name)}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+C.accent,background:C.accentBg,cursor:"pointer",fontSize:10,fontWeight:600,color:C.accent,display:"flex",alignItems:"center",gap:4}} title="Bekijk als deze organisatie"><Icon name="users" size={12} color={C.accent}/>Bekijk</button>
+            <button onClick={function(){setConfirm({title:"Subscription resetten?",msg:"Reset "+org.name+" naar Starter trial (14 dagen). Huidig plan: "+(plan?.name||"geen"),action:function(){resetSub(org.id,"starter")}})}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #d97706",background:"#fef3c7",cursor:"pointer",fontSize:10,fontWeight:600,color:"#92400e",display:"flex",alignItems:"center",gap:4}} title="Reset subscription"><Icon name="time" size={12} color="#d97706"/>Reset</button>
             <button onClick={function(){setConfirm({title:"Organisatie verwijderen?",msg:"Dit verwijdert "+org.name+", alle meldingen, facturen, accounts en "+orgUsers.length+" gebruiker(s). Dit kan niet ongedaan worden!",action:function(){deleteOrg(org.id)}})}} style={{width:26,height:26,borderRadius:6,border:"1px solid #fecaca",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="delete" size={13} color="#dc2626"/></button>
           </div>
         </div>
