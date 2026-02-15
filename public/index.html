@@ -397,7 +397,7 @@ const DEFAULT_PERMS={
   reporter:["dashboard","meldingen","new"]
 };
 const PLANS=[
-  {id:"starter",name:"Starter",price:29,yearPrice:Math.round(29*12*0.85),users:3,buildings:1,free:false,meldingenMax:10,features:["Tot 3 gebruikers","1 gebouw","Max 10 actieve meldingen","E-mail notificaties","Basis rapportage","14 dagen gratis proefperiode"],color:"#2563eb",pop:false},
+  {id:"starter",name:"Starter",price:0,yearPrice:0,users:3,buildings:1,free:true,trial:true,meldingenMax:10,features:["Tot 3 gebruikers","1 gebouw","Max 10 actieve meldingen","E-mail notificaties","Basis rapportage"],color:"#2563eb",pop:false},
   {id:"professional",name:"Professional",price:89,yearPrice:Math.round(89*12*0.85),users:20,buildings:5,free:false,meldingenMax:999,features:["Tot 20 gebruikers","5 gebouwen","Push + E-mail notificaties","Plattegronden uploaden","Uitgebreide rapportage","Prioriteits support","14 dagen gratis proefperiode"],color:"#7c3aed",pop:true},
   {id:"enterprise",name:"Enterprise",price:159,yearPrice:Math.round(159*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,features:["Onbeperkt gebruikers","Onbeperkt gebouwen","Alle functies","24/7 support","Custom integraties","SLA garantie"],color:"#0891b2",pop:false},
   {id:"groep",name:"Groepslicentie",price:129,yearPrice:Math.round(129*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,perLocatie:true,minLocaties:3,features:["Prijs per locatie","Centraal groepsdashboard","Onbeperkt gebruikers/locatie","Vergelijkende rapportage","Dedicated accountmanager","Volume korting vanaf 5+"],color:"#059669",pop:false,contact:true,volumeKorting:{5:0.10,10:0.15,20:0.20}},
@@ -753,7 +753,7 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
       </div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14,marginBottom:28}}>
-      {PLANS.map(p=>{const mp=billing==="year"?Math.round(p.yearPrice/12):p.price;const sv=billing==="year"?Math.round(p.price*12-p.yearPrice):0;return <div key={p.id} onClick={()=>setSel(p.id)} style={{background:C.card,borderRadius:14,padding:"20px 16px",cursor:"pointer",border:"2px solid "+(sel===p.id?p.color:C.border),boxShadow:sel===p.id?"0 8px 24px "+p.color+"12":"0 1px 4px rgba(0,0,0,.04)",transition:"all .2s",position:"relative"}}>
+      {PLANS.filter(p=>!p.trial).map(p=>{const mp=billing==="year"?Math.round(p.yearPrice/12):p.price;const sv=billing==="year"?Math.round(p.price*12-p.yearPrice):0;return <div key={p.id} onClick={()=>setSel(p.id)} style={{background:C.card,borderRadius:14,padding:"20px 16px",cursor:"pointer",border:"2px solid "+(sel===p.id?p.color:C.border),boxShadow:sel===p.id?"0 8px 24px "+p.color+"12":"0 1px 4px rgba(0,0,0,.04)",transition:"all .2s",position:"relative"}}>
         {p.pop&&<div style={{position:"absolute",top:-9,right:14,background:p.color,color:"#fff",padding:"3px 10px",borderRadius:16,fontSize:10,fontWeight:700}}>Meest gekozen</div>}
         <div style={{fontSize:11,fontWeight:700,color:p.color,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>{p.name}</div>
         <div style={{marginBottom:14}}>
@@ -2166,7 +2166,7 @@ function App(){
   };
 
   // Password reset screen (from invite link) — shown even if already logged in
-  if(appPwReset)return <PasswordResetScreen oobCode={appPwReset} onDone={()=>setAppPwReset(null)}/>;
+  if(appPwReset)return <PasswordResetScreen oobCode={appPwReset} onDone={()=>{auth.signOut();setAppPwReset(null)}}/>;
 
   // Loading screen
   if(loading)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg}}>
