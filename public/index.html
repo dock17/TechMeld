@@ -209,8 +209,6 @@ const DB = {
       orgId: orgRef.id,
       registeredAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    // Send email verification
-    await cred.user.sendEmailVerification();
     return cred.user;
   },
 
@@ -1838,36 +1836,6 @@ const CookieBanner=()=>{
 // ═══════════════════════════════════════════
 // EMAIL VERIFICATION SCREEN
 // ═══════════════════════════════════════════
-const EmailVerifyScreen=({onVerified,onLogout})=>{
-  const[busy,setBusy]=useState(false);const[sent,setSent]=useState(false);const[err,setErr]=useState("");
-  const resend=async()=>{
-    setBusy(true);setErr("");
-    try{await auth.currentUser.sendEmailVerification();setSent(true);setTimeout(()=>setSent(false),5000)}
-    catch(e){setErr(e.code==="auth/too-many-requests"?"Te veel verzoeken. Probeer later opnieuw.":"Fout: "+e.message)}
-    setBusy(false);
-  };
-  const checkVerified=async()=>{
-    setBusy(true);setErr("");
-    try{await auth.currentUser.reload();if(auth.currentUser.emailVerified){onVerified()}else{setErr("E-mail is nog niet geverifieerd. Controleer uw inbox.")}}
-    catch(e){setErr("Fout: "+e.message)}
-    setBusy(false);
-  };
-  return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(155deg,#eff6ff 0%,#f8fafc 40%,#faf5ff 100%)",padding:20}}>
-    <div style={{background:"#fff",borderRadius:20,border:"1px solid "+C.border,padding:"40px 30px",maxWidth:460,textAlign:"center",boxShadow:"0 16px 48px rgba(0,0,0,.06)"}}>
-      <div style={{width:64,height:64,borderRadius:16,background:"linear-gradient(135deg,#dbeafe,#bfdbfe)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
-        <Icon name="mail" size={32} color="#2563eb"/>
-      </div>
-      <h2 style={{fontSize:22,fontWeight:800,margin:"0 0 8px"}}>Verifieer uw e-mail</h2>
-      <p style={{fontSize:14,color:C.sub,lineHeight:1.6,margin:"0 0 6px"}}>Controleer uw inbox en klik op de verificatielink.</p>
-      <p style={{fontSize:12,color:C.dim,lineHeight:1.5,margin:"0 0 20px"}}>Er is een verificatie-e-mail verstuurd naar <strong>{auth.currentUser?.email}</strong></p>
-      {err&&<div style={{padding:"7px 10px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:6,marginBottom:12,fontSize:11,color:"#dc2626",fontWeight:500}}>{err}</div>}
-      {sent&&<div style={{padding:"7px 10px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:6,marginBottom:12,fontSize:11,color:"#16a34a",fontWeight:500}}>Verificatie-e-mail opnieuw verstuurd!</div>}
-      <Btn onClick={checkVerified} disabled={busy} sx={{width:"100%",padding:"10px",fontSize:13,marginBottom:8}}>{busy?"Even geduld...":"Ik heb geverifieerd"}</Btn>
-      <button onClick={resend} disabled={busy} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px solid "+C.border,background:"transparent",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:600}}>Verificatie-e-mail opnieuw versturen</button>
-      <button onClick={onLogout} style={{marginTop:14,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:12}}>Uitloggen</button>
-    </div>
-  </div>;
-};
 
 // ═══════════════════════════════════════════
 // AUTH
@@ -1987,7 +1955,6 @@ function App(){
   const[toasts,setToasts]=useState([]);const[loading,setLoading]=useState(true);
   const[appLegalDoc,setAppLegalDoc]=useState(null);
   const[orgId,setOrgId]=useState(null);
-  const[needsVerify,setNeedsVerify]=useState(false);
 
   // Firebase Auth State Listener
   useEffect(()=>{
@@ -2002,13 +1969,6 @@ function App(){
             profile=await DB.getUserProfile(user.uid);
           }
           var isSA=SUPER_ADMINS.includes(user.email);
-          // Email verification check (skip for super admins and invited users)
-          const isOrgOwner=profile&&profile.role==="admin";
-          if(!isSA&&isOrgOwner&&!user.emailVerified){
-            setOrgId(profile.orgId);
-            setNeedsVerify(true);setLoading(false);return;
-          }
-          setNeedsVerify(false);
           if(isSA){
             // Super admin — no org needed
             setStore(p=>({...p,curUser:{id:user.uid,name:profile?.name||user.displayName||"Admin",email:user.email,role:"superadmin",av:profile?.avatar||(user.displayName||"A").slice(0,2).toUpperCase()}}));
@@ -2144,8 +2104,7 @@ function App(){
     </div>
   </div>;
 
-  // Email verification required
-  if(needsVerify)return <EmailVerifyScreen onVerified={()=>{setNeedsVerify(false);window.location.reload()}} onLogout={handleLogout}/>;
+
 
   if(!authed)return <Auth onLogin={()=>{if(!firebaseReady)setAuthed(true)}}/>;
   if(!store.curUser)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg}}>
