@@ -192,7 +192,7 @@ const DB = {
       avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    // Create subscription (free starter + 14-day pro trial)
+    // Create subscription — Professional 14-day trial
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + 14);
     await db.collection('subscriptions').doc(orgRef.id).set({
@@ -397,8 +397,8 @@ const DEFAULT_PERMS={
   reporter:["dashboard","meldingen","new"]
 };
 const PLANS=[
-  {id:"starter",name:"Starter",price:0,yearPrice:0,users:3,buildings:1,free:true,meldingenMax:10,trialDays:14,features:["Tot 3 gebruikers","1 gebouw","Max 10 meldingen","E-mail notificaties","Basis rapportage","14 dagen proefperiode"],color:"#2563eb",pop:false},
-  {id:"professional",name:"Professional",price:89,yearPrice:Math.round(89*12*0.85),users:20,buildings:5,free:false,meldingenMax:999,features:["Tot 20 gebruikers","5 gebouwen","Push + E-mail notificaties","Plattegronden uploaden","Uitgebreide rapportage","Prioriteits support"],color:"#7c3aed",pop:true},
+  {id:"starter",name:"Starter",price:29,yearPrice:Math.round(29*12*0.85),users:3,buildings:1,free:false,meldingenMax:10,features:["Tot 3 gebruikers","1 gebouw","Max 10 actieve meldingen","E-mail notificaties","Basis rapportage"],color:"#2563eb",pop:false},
+  {id:"professional",name:"Professional",price:89,yearPrice:Math.round(89*12*0.85),users:20,buildings:5,free:false,meldingenMax:999,features:["Tot 20 gebruikers","5 gebouwen","Push + E-mail notificaties","Plattegronden uploaden","Uitgebreide rapportage","Prioriteits support","14 dagen gratis proefperiode"],color:"#7c3aed",pop:true},
   {id:"enterprise",name:"Enterprise",price:159,yearPrice:Math.round(159*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,features:["Onbeperkt gebruikers","Onbeperkt gebouwen","Alle functies","24/7 support","Custom integraties","SLA garantie"],color:"#0891b2",pop:false},
   {id:"groep",name:"Groepslicentie",price:129,yearPrice:Math.round(129*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,perLocatie:true,minLocaties:3,features:["Prijs per locatie","Centraal groepsdashboard","Onbeperkt gebruikers/locatie","Vergelijkende rapportage","Dedicated accountmanager","Volume korting vanaf 5+"],color:"#059669",pop:false,contact:true,volumeKorting:{5:0.10,10:0.15,20:0.20}},
 ];
@@ -497,9 +497,10 @@ const mkStore=()=>firebaseReady?{
 const TrialBanner=({sub,onUp})=>{
   if(sub.status!=="trial")return null;
   const dl=Math.max(0,Math.ceil((new Date(sub.trialEnd)-new Date())/(864e5)));
-  return <div style={{background:"linear-gradient(135deg,#eff6ff,#f0fdf4)",border:"1px solid #bfdbfe",borderRadius:12,padding:"12px 16px",margin:"0 0 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",animation:"fadeIn .4s"}}>
-    <div style={{width:38,height:38,borderRadius:10,background:"#dbeafe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="time" size={20} color="#2563eb"/></div>
-    <div style={{flex:1,minWidth:180}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>Professional proefperiode — nog {dl} {dl===1?"dag":"dagen"}</div><div style={{fontSize:12,color:C.sub,marginTop:1}}>Probeer alle Professional functies 14 dagen gratis. Daarna kiest u een betaald abonnement om door te gaan.</div></div>
+  const pl=PLANS.find(p=>p.id===sub.plan);
+  return <div style={{background:"linear-gradient(135deg,#faf5ff,#eff6ff)",border:"1px solid #c4b5fd",borderRadius:12,padding:"12px 16px",margin:"0 0 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",animation:"fadeIn .4s"}}>
+    <div style={{width:38,height:38,borderRadius:10,background:"#ede9fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="time" size={20} color="#7c3aed"/></div>
+    <div style={{flex:1,minWidth:180}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{pl?.name||"Professional"} proefperiode — nog {dl} {dl===1?"dag":"dagen"}</div><div style={{fontSize:12,color:C.sub,marginTop:1}}>Probeer alle {pl?.name||"Professional"} functies gratis. Daarna kiest u een betaald abonnement.</div></div>
     <Btn onClick={onUp} sm>Abonnement kiezen</Btn>
   </div>;
 };
@@ -508,7 +509,7 @@ const TrialBanner=({sub,onUp})=>{
 // RENEWAL BANNER (shows 7 days before expiration)
 // ═══════════════════════════════════════════
 const RenewalBanner=({sub,onRenew})=>{
-  if(!sub||sub.status==="trial"||!sub.expiresAt||sub.plan==="starter")return null;
+  if(!sub||sub.status==="trial"||!sub.expiresAt)return null;
   const now=new Date();
   const exp=new Date(sub.expiresAt);
   const daysLeft=Math.ceil((exp-now)/(864e5));
@@ -740,7 +741,7 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
         <div style={{fontSize:11,color:C.sub,marginTop:2}}>{isExpired?"Verleng uw abonnement om door te gaan":sub.expiresAt?"Geldig tot: "+new Date(sub.expiresAt).toLocaleDateString('nl-BE',{day:'numeric',month:'long',year:'numeric'})+(sub.billing==="year"?" (jaarabonnement)":" (maandabonnement)"):""}</div>
       </div>
     </div>}
-    <div style={{textAlign:"center",marginBottom:28}}><h1 style={{fontSize:26,fontWeight:800,margin:"0 0 6px"}}>Kies uw abonnement</h1><p style={{fontSize:13,color:C.sub}}>14 dagen gratis proberen · Daarna betaald abonnement · Maandelijks opzegbaar</p>
+    <div style={{textAlign:"center",marginBottom:28}}><h1 style={{fontSize:26,fontWeight:800,margin:"0 0 6px"}}>Kies uw abonnement</h1><p style={{fontSize:13,color:C.sub}}>Alle plannen betaald · Maandelijks opzegbaar · 15% korting bij jaarabonnement</p>
       {/* Billing toggle */}
       <div style={{display:"inline-flex",alignItems:"center",gap:10,marginTop:16,padding:"4px",background:"#f1f5f9",borderRadius:10}}>
         <button onClick={()=>setBilling("month")} style={{padding:"8px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:billing==="month"?C.accent:"transparent",color:billing==="month"?"#fff":C.sub,transition:"all .15s"}}>Maandelijks</button>
@@ -755,18 +756,17 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
         {p.pop&&<div style={{position:"absolute",top:-9,right:14,background:p.color,color:"#fff",padding:"3px 10px",borderRadius:16,fontSize:10,fontWeight:700}}>Meest gekozen</div>}
         <div style={{fontSize:11,fontWeight:700,color:p.color,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>{p.name}</div>
         <div style={{marginBottom:14}}>
-          {p.free?<><span style={{fontSize:32,fontWeight:800}}>Gratis</span><div style={{fontSize:10,color:C.dim}}>14 dagen gratis · max {p.users} gebruikers</div></>
-          :<><span style={{fontSize:32,fontWeight:800}}>{fmtMoney(mp).replace(',00','')}</span><span style={{fontSize:12,color:C.sub}}>/{p.perLocatie?"locatie/mnd":"mnd"}</span>
+          <span style={{fontSize:32,fontWeight:800}}>{fmtMoney(mp).replace(',00','')}</span><span style={{fontSize:12,color:C.sub}}>/{p.perLocatie?"locatie/mnd":"mnd"}</span>
           <div style={{fontSize:10,color:C.dim}}>excl. 21% BTW{billing==="year"?" · jaarlijks gefactureerd":""}{p.perLocatie?" · min. "+p.minLocaties+" locaties":""}</div>
           {billing==="year"&&sv>0&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600,marginTop:3}}>💰 Bespaar {fmtMoney(sv)}/jaar{p.perLocatie?" per locatie":""}</div>}
-          {billing==="year"&&<div style={{fontSize:10,color:C.dim,textDecoration:"line-through",marginTop:1}}>{fmtMoney(p.price)}/mnd normaal</div>}</>}
+          {billing==="year"&&<div style={{fontSize:10,color:C.dim,textDecoration:"line-through",marginTop:1}}>{fmtMoney(p.price)}/mnd normaal</div>}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:5}}>{p.features.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5}}><Icon name="check" size={13} color={p.color}/><span style={{fontSize:11}}>{f}</span></div>)}</div>
         <div style={{marginTop:14,padding:"7px",borderRadius:6,textAlign:"center",fontSize:11,fontWeight:600,background:sel===p.id?p.color:"#f1f5f9",color:sel===p.id?"#fff":C.sub,transition:"all .2s"}}>{sel===p.id?"✓ Geselecteerd":"Selecteren"}</div>
       </div>})}
     </div>
-    <div style={{textAlign:"center"}}>{plan.free?<Btn onClick={()=>{onSelect(sel,"free","month");onNotify({title:"Proefperiode gestart!",msg:"14 dagen gratis · daarna betaald abonnement",type:"success"})}} sx={{padding:"11px 32px",fontSize:14}}>14 dagen gratis proberen</Btn>:plan.contact?<Btn onClick={()=>{window.location.href="mailto:info@techmeld.eu?subject=Groepslicentie%20aanvraag&body=Beste%20TechMeld%2C%0A%0AWij%20zijn%20ge%C3%AFnteresseerd%20in%20de%20Groepslicentie%20voor%20meerdere%20locaties.%0A%0AOrganisatie%3A%20%0AAantal%20locaties%3A%20%0A%0AMet%20vriendelijke%20groet";onNotify({title:"E-mail opent...",msg:"Stuur ons uw gegevens en wij maken een offerte op maat",type:"info"})}} sx={{padding:"11px 32px",fontSize:14,background:"#059669"}}>Offerte aanvragen</Btn>:<Btn onClick={()=>setStep("payment")} sx={{padding:"11px 32px",fontSize:14}}>{isExpired?"Abonnement verlengen":"Doorgaan naar betaling"}</Btn>}</div>
-    <div style={{textAlign:"center",marginTop:16,fontSize:11,color:C.dim}}>{plan.free?"Geen betaalgegevens nodig":plan.contact?"Wij maken een offerte op maat voor uw organisatie":"PayPal of Creditcard · Factuur per e-mail · Maandelijks opzegbaar"}</div>
+    <div style={{textAlign:"center"}}>{plan.contact?<Btn onClick={()=>{window.location.href="mailto:info@techmeld.eu?subject=Groepslicentie%20aanvraag&body=Beste%20TechMeld%2C%0A%0AWij%20zijn%20ge%C3%AFnteresseerd%20in%20de%20Groepslicentie%20voor%20meerdere%20locaties.%0A%0AOrganisatie%3A%20%0AAantal%20locaties%3A%20%0A%0AMet%20vriendelijke%20groet";onNotify({title:"E-mail opent...",msg:"Stuur ons uw gegevens en wij maken een offerte op maat",type:"info"})}} sx={{padding:"11px 32px",fontSize:14,background:"#059669"}}>Offerte aanvragen</Btn>:<Btn onClick={()=>setStep("payment")} sx={{padding:"11px 32px",fontSize:14}}>{isExpired?"Abonnement verlengen":"Doorgaan naar betaling"}</Btn>}</div>
+    <div style={{textAlign:"center",marginTop:16,fontSize:11,color:C.dim}}>{plan.contact?"Wij maken een offerte op maat voor uw organisatie":"PayPal of Creditcard · Factuur per e-mail · Maandelijks opzegbaar"}</div>
   </div>;
 };
 
@@ -1842,6 +1842,16 @@ const Auth=({onLogin})=>{
   const[mode,setMode]=useState("login");const[form,setForm]=useState({email:"",pw:"",name:"",org:"",type:"hospital"});
   const[busy,setBusy]=useState(false);const[ok,setOk]=useState(false);const[captchaOk,setCaptchaOk]=useState(false);
   const[err,setErr]=useState("");const[legalDoc,setLegalDoc]=useState(null);const[resetSent,setResetSent]=useState(false);
+  // In-app password reset handler (for invite links)
+  const[pwResetMode,setPwResetMode]=useState(false);const[pwResetCode,setPwResetCode]=useState(null);
+  const[newPw,setNewPw]=useState("");const[pwResetDone,setPwResetDone]=useState(false);const[pwResetErr,setPwResetErr]=useState("");
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("mode")==="resetPassword"&&params.get("oobCode")){
+      setPwResetMode(true);setPwResetCode(params.get("oobCode"));
+      window.history.replaceState({},"",window.location.pathname);
+    }
+  },[]);
   const resetPw=async()=>{
     if(!form.email){setErr("Vul eerst uw e-mailadres in.");return}
     setErr("");setBusy(true);
@@ -1897,6 +1907,46 @@ const Auth=({onLogin})=>{
     setBusy(false);
   };
   const switchMode=(m)=>{setMode(m);setCaptchaOk(false);setErr("");setResetSent(false)};
+  const doResetPw=async()=>{
+    if(!newPw||newPw.length<6){setPwResetErr("Wachtwoord moet minstens 6 tekens zijn.");return}
+    setPwResetErr("");setBusy(true);
+    try{
+      await auth.confirmPasswordReset(pwResetCode,newPw);
+      setPwResetDone(true);
+    }catch(e){
+      setPwResetErr(e.code==="auth/expired-action-code"?"De link is verlopen. Vraag een nieuwe uitnodiging aan.":
+        e.code==="auth/invalid-action-code"?"Ongeldige link. Vraag een nieuwe uitnodiging aan.":
+        "Fout: "+e.message);
+    }
+    setBusy(false);
+  };
+  // Password reset screen (from invite link)
+  if(pwResetMode)return <><CookieBanner/><div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",background:"linear-gradient(155deg,#eff6ff 0%,#f8fafc 40%,#faf5ff 100%)",padding:"40px 16px",overflowY:"auto"}}>
+    <div style={{width:"100%",maxWidth:400,background:"#fff",borderRadius:20,border:"1px solid "+C.border,padding:"32px 24px",boxShadow:"0 16px 48px rgba(0,0,0,.06)",margin:"auto 0"}}>
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:50,height:50,borderRadius:12,background:"linear-gradient(135deg,#2563eb,#7c3aed)",marginBottom:10,boxShadow:"0 6px 20px rgba(37,99,235,.2)"}}><Icon name="shield" size={24} color="white"/></div>
+        <h1 style={{fontSize:24,fontWeight:800,margin:0}}>TechMeld<sup style={{fontSize:9,color:C.accent}}>™</sup></h1>
+        <p style={{fontSize:12,color:C.dim,marginTop:3}}>Wachtwoord instellen</p>
+      </div>
+      {pwResetDone?<>
+        <div style={{padding:"12px 14px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,marginBottom:16,textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:700,color:"#16a34a",marginBottom:4}}>Wachtwoord ingesteld!</div>
+          <div style={{fontSize:12,color:C.sub}}>U kunt nu inloggen met uw nieuwe wachtwoord.</div>
+        </div>
+        <Btn onClick={()=>{setPwResetMode(false);setPwResetDone(false)}} sx={{width:"100%",padding:"10px",fontSize:13}}>Naar inloggen</Btn>
+      </>:<>
+        {pwResetErr&&<div style={{padding:"7px 10px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:6,marginBottom:12,fontSize:11,color:"#dc2626",fontWeight:500}}>{pwResetErr}</div>}
+        <div style={{padding:"9px 12px",background:"#eff6ff",borderRadius:8,border:"1px solid #bfdbfe",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+          <Icon name="lock" size={16} color="#2563eb"/>
+          <div style={{fontSize:12,color:C.sub}}>Stel uw wachtwoord in om TechMeld te gaan gebruiken.</div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <Inp label="Nieuw wachtwoord" type="password" value={newPw} onChange={setNewPw} placeholder="Minimaal 6 tekens"/>
+          <Btn onClick={doResetPw} disabled={busy} sx={{width:"100%",padding:"10px",fontSize:13}}>{busy?"⟳ Even geduld...":"Wachtwoord instellen"}</Btn>
+        </div>
+      </>}
+    </div>
+  </div></>;
   return <>{legalDoc&&<LegalModal doc={legalDoc} onClose={function(){setLegalDoc(null)}}/>}<CookieBanner/><div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",background:"linear-gradient(155deg,#eff6ff 0%,#f8fafc 40%,#faf5ff 100%)",padding:"40px 16px",overflowY:"auto"}}>
     <div style={{width:"100%",maxWidth:400,background:"#fff",borderRadius:20,border:"1px solid "+C.border,padding:"32px 24px",boxShadow:"0 16px 48px rgba(0,0,0,.06)",margin:"auto 0"}}>
       <div style={{textAlign:"center",marginBottom:24}}>
@@ -1930,11 +1980,11 @@ const Auth=({onLogin})=>{
         </div>}
         {mode==="register"&&<Captcha onVerify={setCaptchaOk} verified={captchaOk}/>}
         <div style={{padding:"9px 12px",background:"#eff6ff",borderRadius:8,border:"1px solid #bfdbfe",display:"flex",alignItems:"center",gap:8}}>
-          <Icon name="star" size={16} color="#2563eb"/>
-          <div><div style={{fontSize:12,fontWeight:700}}>Gratis starten!</div><div style={{fontSize:10,color:C.sub}}>14 dagen gratis proberen · Daarna betaald abonnement</div></div>
+          <Icon name="star" size={16} color="#7c3aed"/>
+          <div><div style={{fontSize:12,fontWeight:700,color:"#7c3aed"}}>Professional proefperiode</div><div style={{fontSize:10,color:C.sub}}>14 dagen gratis alle functies · Daarna betaald abonnement</div></div>
         </div>
         <Btn onClick={go} disabled={busy||(mode==="register"&&(!ok||!captchaOk))} sx={{width:"100%",padding:"10px",fontSize:13,marginTop:2}}>
-          {busy?"⟳ Even geduld...":mode==="login"?"Inloggen":"Gratis starten →"}
+          {busy?"⟳ Even geduld...":mode==="login"?"Inloggen":"14 dagen gratis proberen →"}
         </Btn>
       </div>
       <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid "+C.border,textAlign:"center"}}>
@@ -2130,7 +2180,7 @@ function App(){
   }
 
   // Paid subscription expiration check
-  const subExpired=!isSuperAdmin&&store.sub?.status==="active"&&store.sub.plan!=="starter"&&store.sub.expiresAt&&new Date(store.sub.expiresAt)<new Date();
+  const subExpired=!isSuperAdmin&&store.sub?.status==="active"&&store.sub.expiresAt&&new Date(store.sub.expiresAt)<new Date();
   if(subExpired&&page!=="billing"){
     return <SubExpiredScreen sub={store.sub} onRenew={function(){setPage("billing")}} onLogout={handleLogout}/>;
   }
