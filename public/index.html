@@ -1583,9 +1583,7 @@ const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
       if(functions){
         var inviteUser=functions.httpsCallable("inviteUser");
         var result=await inviteUser({name:nu.name,email:nu.email,role:nu.role,orgId:orgId});
-        // Send the actual password reset email
-        await auth.sendPasswordResetEmail(nu.email);
-        onNotify({title:"Uitgenodigd!",msg:nu.name+" ontvangt een email om wachtwoord in te stellen.",type:"success"});
+        onNotify({title:"Uitgenodigd!",msg:nu.name+" ontvangt een e-mail om wachtwoord in te stellen.",type:"success"});
       }else{
         // Fallback demo mode
         onUpd([...users,{id:uid(),...nu,perms:DEFAULT_PERMS[nu.role]||DEFAULT_PERMS.reporter,av:nu.name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}]);

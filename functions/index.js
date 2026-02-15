@@ -124,8 +124,9 @@ exports.verifyRecaptcha = onCall({region:"europe-west1"}, async(req)=>{
       body:JSON.stringify({event:{token,expectedAction:action||"REGISTER",siteKey:RECAPTCHA_SITE_KEY}})
     });
     const data=await res.json();
+    console.log("reCAPTCHA API response:",JSON.stringify(data));
     if(!data.tokenProperties||!data.tokenProperties.valid){
-      console.warn("reCAPTCHA invalid token:",data.tokenProperties?.invalidReason);
+      console.warn("reCAPTCHA invalid token:",JSON.stringify(data));
       throw new HttpsError("permission-denied","reCAPTCHA verificatie mislukt");
     }
     if(action&&data.tokenProperties.action!==action){
@@ -146,13 +147,25 @@ exports.verifyRecaptcha = onCall({region:"europe-west1"}, async(req)=>{
   }
 });
 
-exports.inviteUser = onCall({region:"europe-west1"}, async(req)=>{
+exports.inviteUser = onCall({region:"europe-west1",secrets:["EMAIL_PASS"]}, async(req)=>{
   const{name,email,role,orgId}=req.data;
   if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
   let ur;
   try{ur=await admin.auth().createUser({email,displayName:name});}
   catch(e){if(e.code==="auth/email-already-exists")ur=await admin.auth().getUserByEmail(email);else throw new HttpsError("internal",e.message);}
   await db.collection("users").doc(ur.uid).set({name,email,role:role||"reporter",orgId,avatar:name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),createdAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
+  // Send invitation email with password setup link
+  try{
+    const resetLink=await admin.auth().generatePasswordResetLink(email,{url:"https://techmeld.eu"});
+    const orgDoc=await db.collection("organizations").doc(orgId).get();
+    const orgName=orgDoc.exists?(orgDoc.data().name||"uw organisatie"):"uw organisatie";
+    const inviterDoc=await db.collection("users").doc(req.auth.uid).get();
+    const inviterName=inviterDoc.exists?(inviterDoc.data().name||"Een beheerder"):"Een beheerder";
+    const rl=ROLE_LABELS[role]||"Melder";
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif"><table width="100%" style="background:#f1f5f9;padding:24px 0"><tr><td align="center"><table width="540" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)"><tr><td style="background:#1e293b;padding:18px 24px"><span style="color:#60a5fa;font-size:18px;font-weight:800">Tech</span><span style="color:#fff;font-size:18px;font-weight:800">Meld</span><span style="color:#60a5fa;font-size:10px;vertical-align:super">™</span><span style="float:right;color:#94a3b8;font-size:12px">${orgName}</span></td></tr><tr><td style="background:#eff6ff;padding:8px 24px;border-bottom:2px solid #2563eb"><span style="color:#2563eb;font-weight:700;font-size:12px">👋 UITNODIGING</span><span style="float:right;color:#64748b;font-size:12px">Rol: <b>${rl}</b></span></td></tr><tr><td style="padding:24px"><h2 style="margin:0 0 8px;font-size:17px;color:#1e293b">Welkom bij TechMeld, ${name}!</h2><p style="margin:0 0 16px;color:#64748b;font-size:13px;line-height:1.6"><strong>${inviterName}</strong> heeft u uitgenodigd voor <strong>${orgName}</strong> als <strong>${rl}</strong>.</p><p style="margin:0 0 20px;color:#64748b;font-size:13px;line-height:1.6">Klik op onderstaande knop om uw wachtwoord in te stellen en direct aan de slag te gaan.</p></td></tr><tr><td style="padding:0 24px 24px" align="center"><a href="${resetLink}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">Wachtwoord instellen</a></td></tr><tr><td style="padding:0 24px 20px"><p style="margin:0;color:#94a3b8;font-size:11px;line-height:1.5">Werkt de knop niet? Kopieer deze link:<br><a href="${resetLink}" style="color:#2563eb;word-break:break-all;font-size:10px">${resetLink}</a></p></td></tr><tr><td style="background:#f8fafc;padding:12px 24px;border-top:1px solid #e2e8f0"><p style="margin:0;font-size:10px;color:#94a3b8;text-align:center">© 2026 TechMeld™ — Technisch Meldingenbeheer</p></td></tr></table></td></tr></table></body></html>`;
+    await getTransporter().sendMail({from:FROM,to:email,subject:`👋 Uitnodiging: ${orgName} op TechMeld`,html});
+    console.log(`✅ Invite email sent to ${email} for ${orgName}`);
+  }catch(e){console.error("❌ Invite email error:",e);}
   return{uid:ur.uid,email};
 });
 
