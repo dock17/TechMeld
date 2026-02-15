@@ -394,7 +394,7 @@ const PAGES=[{id:"dashboard",l:"Dashboard"},{id:"meldingen",l:"Meldingen"},{id:"
 const DEFAULT_PERMS={
   admin:["dashboard","meldingen","new","building","floorplans","users","rapportage","groep","locaties","vergelijk","billing","settings"],
   technician:["dashboard","meldingen","new","building","floorplans","rapportage"],
-  reporter:["dashboard","meldingen","new"]
+  reporter:["dashboard","meldingen","new","building"]
 };
 const PLANS=[
   {id:"starter",name:"Starter",price:0,yearPrice:0,users:3,buildings:1,free:true,trial:true,meldingenMax:10,features:["Tot 3 gebruikers","1 gebouw","Max 10 actieve meldingen","E-mail notificaties","Basis rapportage"],color:"#2563eb",pop:false},
@@ -1381,7 +1381,8 @@ const VergelijkendeRapportage=({org,orgId,onNotify})=>{
   </div>;
 };
 
-const Building=({org,onUpd,onNotify,sub})=>{
+const Building=({org,onUpd,onNotify,sub,role})=>{
+  const canEdit=role==="admin"||role==="technician"||role==="superadmin";
   const buildings=org.buildings||[{id:"b_default",name:"Gebouw"}];
   const[selB,setSelB]=useState(buildings[0]?.id||"");
   const[nf,setNf]=useState({name:"",nr:0});const[nr,setNr]=useState({name:"",fId:"",t:"patient"});const[sf,setSf]=useState(false);const[sr,setSr]=useState(false);const[bulkMode,setBulkMode]=useState(false);const[bulk,setBulk]=useState({from:"",to:"",prefix:"Kamer ",fId:"",t:"patient"});
@@ -1396,13 +1397,13 @@ const Building=({org,onUpd,onNotify,sub})=>{
   return <div style={{padding:"20px 16px",maxWidth:880}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
       <div><h1 style={{fontSize:24,fontWeight:800,margin:0}}>Gebouwen</h1><p style={{fontSize:12,color:buildings.length>=maxB.buildings&&maxB.buildings<999?"#dc2626":C.dim,marginTop:1}}>{buildings.length}/{maxB.buildings<999?maxB.buildings:"∞"} gebouwen · {org.floors.length} verdiepingen · {org.rooms.length} ruimtes</p></div>
-      <div style={{display:"flex",gap:6}}><Btn onClick={()=>setSb(true)} v="secondary" sm>+ Gebouw</Btn><Btn onClick={()=>setSf(true)} v="secondary" sm>+ Verdieping</Btn><Btn onClick={()=>setSr(true)} sm>+ Ruimte</Btn></div>
+      {canEdit&&<div style={{display:"flex",gap:6}}><Btn onClick={()=>setSb(true)} v="secondary" sm>+ Gebouw</Btn><Btn onClick={()=>setSf(true)} v="secondary" sm>+ Verdieping</Btn><Btn onClick={()=>setSr(true)} sm>+ Ruimte</Btn></div>}
     </div>
     {/* Building tabs */}
     <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
       {buildings.map(b=><div key={b.id} style={{display:"flex",alignItems:"center",gap:0}}>
         <button onClick={()=>setSelB(b.id)} style={{padding:"7px 14px",borderRadius:editB===b.id?"8px 0 0 8px":"8px",border:"1px solid "+(selB===b.id?C.accent:C.border),borderRight:editB===b.id?"none":undefined,background:selB===b.id?C.accentBg:C.card,color:selB===b.id?C.accent:C.sub,fontSize:13,fontWeight:selB===b.id?700:500,cursor:"pointer",transition:"all .15s"}}><Icon name="building" size={13} color={selB===b.id?C.accent:C.dim}/> {b.name}</button>
-        {selB===b.id&&editB!==b.id&&<button onClick={()=>{setEditB(b.id);setEditBName(b.name)}} style={{padding:"7px 6px",border:"1px solid "+C.accent,borderLeft:"none",borderRadius:"0 8px 8px 0",background:C.accentBg,cursor:"pointer",display:"flex",alignItems:"center"}}><Icon name="edit" size={11} color={C.accent}/></button>}
+        {canEdit&&selB===b.id&&editB!==b.id&&<button onClick={()=>{setEditB(b.id);setEditBName(b.name)}} style={{padding:"7px 6px",border:"1px solid "+C.accent,borderLeft:"none",borderRadius:"0 8px 8px 0",background:C.accentBg,cursor:"pointer",display:"flex",alignItems:"center"}}><Icon name="edit" size={11} color={C.accent}/></button>}
       </div>)}
     </div>
     {/* Edit building name */}
@@ -1423,13 +1424,13 @@ const Building=({org,onUpd,onNotify,sub})=>{
       :<div style={{display:"flex",gap:8,alignItems:"end",flexWrap:"wrap"}}><div style={{flex:1,minWidth:80}}><Inp label="Prefix" value={bulk.prefix} onChange={v=>setBulk({...bulk,prefix:v})} placeholder="Kamer "/></div><div style={{flex:1,minWidth:60}}><Inp label="Van" type="number" value={bulk.from} onChange={v=>setBulk({...bulk,from:v})}/></div><div style={{flex:1,minWidth:60}}><Inp label="Tot" type="number" value={bulk.to} onChange={v=>setBulk({...bulk,to:v})}/></div><div style={{flex:1,minWidth:90}}><Sel label="Verdieping" value={bulk.fId||bFloors[0]?.id||""} onChange={v=>setBulk({...bulk,fId:v})} options={bFloors.map(f=>({v:f.id,l:f.name}))}/></div><div style={{flex:1,minWidth:90}}><Sel label="Type" value={bulk.t} onChange={v=>setBulk({...bulk,t:v})} options={Object.entries(rt).map(([k,v])=>({v:k,l:v}))}/></div><Btn onClick={()=>{const f=parseInt(bulk.from),t=parseInt(bulk.to);if(isNaN(f)||isNaN(t)||f>t){onNotify({title:"Ongeldige reeks",type:"error"});return}if(t-f>200){onNotify({title:"Max 200 kamers per keer",type:"error"});return}const fId=bulk.fId||bFloors[0]?.id;if(!fId)return;const newRooms=[];for(let i=f;i<=t;i++)newRooms.push({id:uid(),name:bulk.prefix+i,fId:fId,t:bulk.t});onUpd({...org,rooms:[...org.rooms,...newRooms]});setBulk({from:"",to:"",prefix:"Kamer ",fId:"",t:"patient"});setSr(false);onNotify({title:newRooms.length+" kamers toegevoegd",type:"success"})}} sm>OK</Btn><Btn onClick={()=>setSr(false)} v="secondary" sm>✕</Btn></div>}
     </div>}
     {/* Floors & rooms for selected building */}
-    {bFloors.length===0&&<div style={{background:C.card,borderRadius:10,border:"1px solid "+C.border,padding:28,textAlign:"center"}}><p style={{color:C.dim,fontSize:13}}>Nog geen verdiepingen. Klik "+ Verdieping" om te beginnen.</p></div>}
+    {bFloors.length===0&&<div style={{background:C.card,borderRadius:10,border:"1px solid "+C.border,padding:28,textAlign:"center"}}><p style={{color:C.dim,fontSize:13}}>{canEdit?"Nog geen verdiepingen. Klik \"+ Verdieping\" om te beginnen.":"Nog geen verdiepingen."}</p></div>}
     {bFloors.map(fl=>{const rs=org.rooms.filter(r=>r.fId===fl.id);return <div key={fl.id} style={{background:C.card,borderRadius:10,border:"1px solid "+C.border,overflow:"hidden",marginBottom:6}}>
       <div style={{padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:rs.length?"1px solid "+C.border:"none",background:"#f8fafc"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:28,height:28,borderRadius:6,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.accent}}>{fl.nr}</div><div><div style={{fontSize:13,fontWeight:600}}>{fl.name}</div><div style={{fontSize:10,color:C.dim}}>{rs.length} ruimtes</div></div></div>
-        <Btn onClick={()=>onUpd({...org,floors:org.floors.filter(f=>f.id!==fl.id),rooms:org.rooms.filter(r=>r.fId!==fl.id)})} v="danger" sm><Icon name="delete" size={13}/></Btn>
+        {canEdit&&<Btn onClick={()=>onUpd({...org,floors:org.floors.filter(f=>f.id!==fl.id),rooms:org.rooms.filter(r=>r.fId!==fl.id)})} v="danger" sm><Icon name="delete" size={13}/></Btn>}
       </div>
-      {rs.length>0&&<div style={{padding:"8px 14px",display:"flex",flexWrap:"wrap",gap:4}}>{rs.map(room=><div key={room.id} style={{padding:"4px 8px",borderRadius:5,border:"1px solid "+C.border,background:"#f8fafc",display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11}}>{room.name}</span><span style={{fontSize:8,color:C.dim,textTransform:"uppercase",background:C.accentBg,padding:"1px 4px",borderRadius:2}}>{rt[room.t]||room.t}</span><button onClick={()=>onUpd({...org,rooms:org.rooms.filter(r=>r.id!==room.id)})} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><Icon name="close" size={10} color={C.dim}/></button></div>)}</div>}
+      {rs.length>0&&<div style={{padding:"8px 14px",display:"flex",flexWrap:"wrap",gap:4}}>{rs.map(room=><div key={room.id} style={{padding:"4px 8px",borderRadius:5,border:"1px solid "+C.border,background:"#f8fafc",display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11}}>{room.name}</span><span style={{fontSize:8,color:C.dim,textTransform:"uppercase",background:C.accentBg,padding:"1px 4px",borderRadius:2}}>{rt[room.t]||room.t}</span>{canEdit&&<button onClick={()=>onUpd({...org,rooms:org.rooms.filter(r=>r.id!==room.id)})} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><Icon name="close" size={10} color={C.dim}/></button>}</div>)}</div>}
     </div>})}
   </div>;
 };
@@ -2039,12 +2040,12 @@ function App(){
           }else{
             // No profile found — show error, don't fall back to demo data
             console.error("No Firestore profile found for user:",user.uid);
-            setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||"Gebruiker",email:user.email,role:"admin",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
+            setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||"Gebruiker",email:user.email,role:"reporter",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
             setAuthed(true);
           }
         }catch(e){
           console.error("Profile load error:",e);
-          setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||user.email?.split("@")[0]||"Gebruiker",email:user.email,role:"admin",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
+          setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||user.email?.split("@")[0]||"Gebruiker",email:user.email,role:"reporter",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
           setAuthed(true);
         }
       }else{
@@ -2226,7 +2227,7 @@ function App(){
       case"dashboard":return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
       case"meldingen":return <MeldingenList mel={store.meldingen} org={store.org} sub={store.sub} cur={store.curUser} orgId={orgId} onNav={nav} onNotify={notify}/>;
       case"new":return <NewMeld org={store.org} users={store.users} cur={store.curUser} sub={store.sub} onSubmit={addMel} onNav={nav} onNotify={notify}/>;
-      case"building":return <Building org={store.org} sub={store.sub} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{buildings:o.buildings||[],floors:o.floors,rooms:o.rooms}).catch(e=>console.error(e))}} onNotify={notify}/>;
+      case"building":return <Building org={store.org} sub={store.sub} role={store.curUser?.role} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{buildings:o.buildings||[],floors:o.floors,rooms:o.rooms}).catch(e=>console.error(e))}} onNotify={notify}/>;
       case"floorplans":return <FloorPlans org={store.org} orgId={orgId} onNotify={notify}/>;
       case"rapportage":return <Rapportage mel={store.meldingen} org={store.org} users={store.users} onNotify={notify}/>;
       case"groep":return <GroepDashboard org={store.org} orgId={orgId} sub={store.sub} onNav={nav} onNotify={notify}/>;
