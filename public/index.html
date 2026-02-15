@@ -41,6 +41,7 @@
     input::placeholder,textarea::placeholder{color:#94a3b8}
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
     .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:#fff;border-top:1px solid #e2e8f0;padding:4px 8px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
     @media(max-width:768px){.mobile-nav{display:flex}.desktop-sidebar{display:none!important}.main-content{padding-bottom:68px!important}}
     @media print{body::before{content:"© 2026 TechMeld™ — Vertrouwelijk";display:block;padding:8px;font-size:10px;text-align:center;color:#999;border-bottom:1px solid #e5e7eb}}
@@ -2038,6 +2039,21 @@ function App(){
   const[appLegalDoc,setAppLegalDoc]=useState(null);
   const[orgId,setOrgId]=useState(null);
   const[impersonating,setImpersonating]=useState(null); // {orgId,orgName} when super admin views a client
+  const[showInstall,setShowInstall]=useState(false);
+  useEffect(()=>{
+    const show=()=>setShowInstall(true);
+    if(deferredPrompt)setShowInstall(true);
+    window.addEventListener('pwa-installable',show);
+    return()=>window.removeEventListener('pwa-installable',show);
+  },[]);
+  const handleInstall=async()=>{
+    if(!deferredPrompt)return;
+    deferredPrompt.prompt();
+    const result=await deferredPrompt.userChoice;
+    if(result.outcome==='accepted')setShowInstall(false);
+    deferredPrompt=null;
+  };
+  const dismissInstall=()=>{setShowInstall(false);try{sessionStorage.setItem('tm_pwa_dismissed','1')}catch(e){}};
   // Detect password reset link (from invite email) — must be checked before auth state
   const[appPwReset,setAppPwReset]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
@@ -2210,7 +2226,14 @@ function App(){
     </div>
   </div>;
 
-  if(!authed)return <Auth onLogin={()=>{if(!firebaseReady)setAuthed(true)}}/>;
+  if(!authed)return React.createElement(React.Fragment,null,
+    showInstall&&!sessionStorage.getItem('tm_pwa_dismissed')&&React.createElement('div',{style:{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",borderRadius:16,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 32px rgba(37,99,235,.35)",maxWidth:360,width:"calc(100% - 32px)",animation:"slideUp .3s ease"}},
+      React.createElement('div',{style:{width:40,height:40,borderRadius:10,background:"rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
+        React.createElement('svg',{width:22,height:22,viewBox:"0 0 24 24",fill:"none",stroke:"#fff",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"},React.createElement('path',{d:"M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"}),React.createElement('polyline',{points:"7 10 12 15 17 10"}),React.createElement('line',{x1:12,y1:15,x2:12,y2:3}))),
+      React.createElement('div',{style:{flex:1}},React.createElement('div',{style:{fontWeight:700,fontSize:14,marginBottom:2}},"Installeer TechMeld"),React.createElement('div',{style:{fontSize:12,opacity:.85}},"Voeg toe aan je startscherm")),
+      React.createElement('button',{onClick:handleInstall,style:{padding:"8px 16px",borderRadius:8,border:"none",background:"#fff",color:"#2563eb",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0}},"Installeer"),
+      React.createElement('button',{onClick:dismissInstall,style:{position:"absolute",top:6,right:8,background:"none",border:"none",color:"rgba(255,255,255,.6)",fontSize:18,cursor:"pointer",lineHeight:1}},"×")),
+    React.createElement(Auth,{onLogin:function(){if(!firebaseReady)setAuthed(true)}}));
   if(!store.curUser)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg}}>
     <div style={{textAlign:"center"}}>
       <div style={{fontSize:14,fontWeight:600,color:C.text}}>Profiel laden...</div>
@@ -2278,6 +2301,17 @@ function App(){
   return <div className="app-shell" style={{display:"flex",height:"100vh",background:C.bg,overflow:"hidden"}}>
     <Toast items={toasts} onDismiss={id=>setToasts(p=>p.filter(n=>n.id!==id))}/>
     {appLegalDoc&&<LegalModal doc={appLegalDoc} onClose={function(){setAppLegalDoc(null)}}/>}
+    {showInstall&&!sessionStorage.getItem('tm_pwa_dismissed')&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",borderRadius:16,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 32px rgba(37,99,235,.35)",maxWidth:360,width:"calc(100% - 32px)",animation:"slideUp .3s ease"}}>
+      <div style={{width:40,height:40,borderRadius:10,background:"rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <div style={{flex:1}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>Installeer TechMeld</div>
+        <div style={{fontSize:12,opacity:.85}}>Voeg toe aan je startscherm voor snelle toegang</div>
+      </div>
+      <button onClick={handleInstall} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#fff",color:"#2563eb",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0}}>Installeer</button>
+      <button onClick={dismissInstall} style={{position:"absolute",top:6,right:8,background:"none",border:"none",color:"rgba(255,255,255,.6)",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+    </div>}
     <Sidebar active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub}/>
     <main className="main-content" style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
       {impersonating&&<div style={{background:"linear-gradient(90deg,#dc2626,#b91c1c)",color:"#fff",padding:"6px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
