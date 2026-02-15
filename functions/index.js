@@ -103,6 +103,17 @@ exports.onMeldingUpdate = onDocumentUpdated({document:"organizations/{orgId}/mel
 const RECAPTCHA_SITE_KEY="6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0";
 const RECAPTCHA_API_KEY="AIzaSyDGgQBiHQVa8z8khvrIKp392mc_d8dDEJU";
 
+exports.checkTrialEligibility = onCall({region:"europe-west1"}, async(req)=>{
+  const{email}=req.data;
+  if(!email)throw new HttpsError("invalid-argument","E-mail is vereist");
+  const emailKey=email.toLowerCase().replace(/[.#$/\[\]]/g,'_');
+  const doc=await db.collection("trialHistory").doc(emailKey).get();
+  if(doc.exists){
+    throw new HttpsError("already-exists","Dit e-mailadres heeft al een proefperiode gehad.");
+  }
+  return{eligible:true};
+});
+
 exports.verifyRecaptcha = onCall({region:"europe-west1"}, async(req)=>{
   const{token,action}=req.data;
   if(!token)throw new HttpsError("invalid-argument","Token mancante");

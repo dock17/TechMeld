@@ -1749,6 +1749,7 @@ const Settings=({org,onUpd,onNotify,onNav})=>{
 // ═══════════════════════════════════════════
 const RECAPTCHA_KEY="6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0";
 const verifyRecaptcha=functions.httpsCallable("verifyRecaptcha");
+const checkTrialEligibility=functions.httpsCallable("checkTrialEligibility");
 const Captcha=({onVerify,verified})=>{
   const[busy,setBusy]=useState(false);const[err,setErr]=useState("");
   const verify=async()=>{
@@ -1888,11 +1889,10 @@ const Auth=({onLogin})=>{
       if(mode==="register"){
         if(!form.name||!form.org||!form.email||!form.pw){setErr("Vul alle velden in.");setBusy(false);return}
         if(form.pw.length<6){setErr("Wachtwoord moet minstens 6 tekens zijn.");setBusy(false);return}
-        // Anti-abuse: check if email already used a trial
+        // Anti-abuse: check if email already used a trial (via Cloud Function)
         if(firebaseReady){
-          const emailKey=form.email.toLowerCase().replace(/[.#$/\[\]]/g,'_');
-          const trialDoc=await db.collection('trialHistory').doc(emailKey).get();
-          if(trialDoc.exists){setErr("Dit e-mailadres heeft al een proefperiode gehad.");setBusy(false);return}
+          try{await checkTrialEligibility({email:form.email})}
+          catch(e){setErr(e.message||"Dit e-mailadres heeft al een proefperiode gehad.");setBusy(false);return}
         }
         await DB.register(form.email,form.pw,form.name,form.org,form.type);
       }else{
