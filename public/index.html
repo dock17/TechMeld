@@ -1897,12 +1897,12 @@ const Auth=({onLogin})=>{
         await DB.register(form.email,form.pw,form.name,form.org,form.type);
       }else{
         if(!form.email||!form.pw){setErr("Vul e-mail en wachtwoord in.");setBusy(false);return}
-        // Invisible reCAPTCHA check for login
+        // Invisible reCAPTCHA check for login (soft check — don't block on failure)
         if(firebaseReady&&window.grecaptcha&&window.grecaptcha.enterprise){
           try{
             const token=await window.grecaptcha.enterprise.execute(RECAPTCHA_KEY,{action:'LOGIN'});
             await verifyRecaptcha({token,action:'LOGIN'});
-          }catch(e){setErr("Beveiligingscontrole mislukt. Probeer opnieuw.");setBusy(false);return}
+          }catch(e){console.warn("Login reCAPTCHA soft-fail:",e.message)}
         }
         await DB.login(form.email,form.pw);
       }
