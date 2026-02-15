@@ -1748,6 +1748,7 @@ const Settings=({org,onUpd,onNotify,onNav})=>{
 // CAPTCHA (reCAPTCHA Enterprise)
 // ═══════════════════════════════════════════
 const RECAPTCHA_KEY="6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0";
+const verifyRecaptcha=functions.httpsCallable("verifyRecaptcha");
 const Captcha=({onVerify,verified})=>{
   const[busy,setBusy]=useState(false);const[err,setErr]=useState("");
   const verify=async()=>{
@@ -1755,8 +1756,11 @@ const Captcha=({onVerify,verified})=>{
     try{
       await new Promise((res)=>{if(window.grecaptcha&&window.grecaptcha.enterprise){res()}else{const iv=setInterval(()=>{if(window.grecaptcha&&window.grecaptcha.enterprise){clearInterval(iv);res()}},200);setTimeout(()=>{clearInterval(iv);res()},5000)}});
       const token=await window.grecaptcha.enterprise.execute(RECAPTCHA_KEY,{action:'REGISTER'});
-      if(token){onVerify(true)}else{setErr("Verificatie mislukt. Probeer opnieuw.")}
-    }catch(e){setErr("Verificatie mislukt. Probeer opnieuw.")}
+      if(!token){setErr("Verificatie mislukt. Probeer opnieuw.");setBusy(false);return}
+      // Server-side verification
+      const result=await verifyRecaptcha({token,action:'REGISTER'});
+      if(result.data?.success){onVerify(true)}else{setErr("Verificatie mislukt. Probeer opnieuw.")}
+    }catch(e){setErr(e.message||"Verificatie mislukt. Probeer opnieuw.")}
     setBusy(false);
   };
 

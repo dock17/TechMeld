@@ -100,6 +100,41 @@ exports.onMeldingUpdate = onDocumentUpdated({document:"organizations/{orgId}/mel
   }catch(e){console.error("❌",e);}
 });
 
+const RECAPTCHA_SITE_KEY="6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0";
+const RECAPTCHA_API_KEY="AIzaSyDGgQBiHQVa8z8khvrIKp392mc_d8dDEJU";
+
+exports.verifyRecaptcha = onCall({region:"europe-west1"}, async(req)=>{
+  const{token,action}=req.data;
+  if(!token)throw new HttpsError("invalid-argument","Token mancante");
+  try{
+    const res=await fetch(`https://recaptchaenterprise.googleapis.com/v1/projects/techmeld/assessments?key=${RECAPTCHA_API_KEY}`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({event:{token,expectedAction:action||"REGISTER",siteKey:RECAPTCHA_SITE_KEY}})
+    });
+    const data=await res.json();
+    if(!data.tokenProperties||!data.tokenProperties.valid){
+      console.warn("reCAPTCHA invalid token:",data.tokenProperties?.invalidReason);
+      throw new HttpsError("permission-denied","reCAPTCHA verificatie mislukt");
+    }
+    if(action&&data.tokenProperties.action!==action){
+      console.warn("reCAPTCHA action mismatch:",data.tokenProperties.action,"vs",action);
+      throw new HttpsError("permission-denied","reCAPTCHA verificatie mislukt");
+    }
+    const score=data.riskAnalysis?.score??0;
+    if(score<0.3){
+      console.warn("reCAPTCHA low score:",score);
+      throw new HttpsError("permission-denied","reCAPTCHA verificatie mislukt — verdacht verkeer");
+    }
+    console.log(`✅ reCAPTCHA OK: score=${score}, action=${action}`);
+    return{success:true,score};
+  }catch(e){
+    if(e instanceof HttpsError)throw e;
+    console.error("reCAPTCHA error:",e);
+    throw new HttpsError("internal","reCAPTCHA verificatie fout");
+  }
+});
+
 exports.inviteUser = onCall({region:"europe-west1"}, async(req)=>{
   const{name,email,role,orgId}=req.data;
   if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
