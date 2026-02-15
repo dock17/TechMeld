@@ -23,6 +23,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <!-- reCAPTCHA Enterprise -->
+  <script src="https://www.google.com/recaptcha/enterprise.js?render=6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0"></script>
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -42,6 +44,7 @@
     .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:#fff;border-top:1px solid #e2e8f0;padding:4px 8px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
     @media(max-width:768px){.mobile-nav{display:flex}.desktop-sidebar{display:none!important}.main-content{padding-bottom:68px!important}}
     @media print{body::before{content:"© 2026 TechMeld™ — Vertrouwelijk";display:block;padding:8px;font-size:10px;text-align:center;color:#999;border-bottom:1px solid #e5e7eb}}
+    .grecaptcha-badge{visibility:hidden!important}
   </style>
 </head>
 <body>
@@ -1742,77 +1745,33 @@ const Settings=({org,onUpd,onNotify,onNav})=>{
 };
 
 // ═══════════════════════════════════════════
-// CAPTCHA
+// CAPTCHA (reCAPTCHA Enterprise)
 // ═══════════════════════════════════════════
+const RECAPTCHA_KEY="6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0";
 const Captcha=({onVerify,verified})=>{
-  const[nums]=useState(()=>{const a=Math.floor(Math.random()*10)+1;const b=Math.floor(Math.random()*10)+1;return{a,b,answer:a+b}});
-  const[input,setInput]=useState("");
-  const[wrong,setWrong]=useState(false);
-  const[dragged,setDragged]=useState(0);
-  const[dragging,setDragging]=useState(false);
-  const barRef=useRef(null);
-  const THRESHOLD=85;// percentage to reach
-
-  const startDrag=(clientX)=>{
-    setDragging(true);setWrong(false);
-    const move=(e2)=>{
-      const cx=e2.touches?e2.touches[0].clientX:e2.clientX;
-      const bar=barRef.current;if(!bar)return;
-      const rect=bar.getBoundingClientRect();
-      const pct=Math.min(100,Math.max(0,((cx-rect.left)/(rect.width))*100));
-      setDragged(pct);
-    };
-    const end=()=>{
-      setDragging(false);
-      document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',end);
-      document.removeEventListener('touchmove',move);document.removeEventListener('touchend',end);
-    };
-    document.addEventListener('mousemove',move);document.addEventListener('mouseup',end);
-    document.addEventListener('touchmove',move,{passive:true});document.addEventListener('touchend',end);
+  const[busy,setBusy]=useState(false);const[err,setErr]=useState("");
+  const verify=async()=>{
+    setBusy(true);setErr("");
+    try{
+      await new Promise((res)=>{if(window.grecaptcha&&window.grecaptcha.enterprise){res()}else{const iv=setInterval(()=>{if(window.grecaptcha&&window.grecaptcha.enterprise){clearInterval(iv);res()}},200);setTimeout(()=>{clearInterval(iv);res()},5000)}});
+      const token=await window.grecaptcha.enterprise.execute(RECAPTCHA_KEY,{action:'REGISTER'});
+      if(token){onVerify(true)}else{setErr("Verificatie mislukt. Probeer opnieuw.")}
+    }catch(e){setErr("Verificatie mislukt. Probeer opnieuw.")}
+    setBusy(false);
   };
-
-  useEffect(()=>{
-    if(dragged>=THRESHOLD&&!verified){
-      onVerify(true);
-    }else if(dragged>0&&dragged<THRESHOLD&&!dragging){
-      // spring back
-      setDragged(0);
-    }
-  },[dragged,dragging]);
 
   if(verified)return <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#f0fdf4",borderRadius:8,border:"1px solid #bbf7d0"}}>
     <div style={{width:22,height:22,borderRadius:11,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={14} color="white"/></div>
     <span style={{fontSize:12,fontWeight:600,color:"#16a34a"}}>Verificatie geslaagd</span>
   </div>;
 
-  return <div style={{borderRadius:8,border:"1px solid "+C.border,overflow:"hidden",background:"#f8fafc"}}>
-    <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
-      <div style={{width:20,height:20,borderRadius:4,background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="shield" size={12} color={C.sub}/></div>
+  return <div style={{borderRadius:8,border:"1px solid "+C.border,overflow:"hidden",background:"#f8fafc",padding:"10px 14px"}}>
+    {err&&<div style={{fontSize:11,color:"#dc2626",marginBottom:6}}>{err}</div>}
+    <button onClick={verify} disabled={busy} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",cursor:busy?"wait":"pointer",padding:0}}>
+      <div style={{width:22,height:22,borderRadius:4,border:"2px solid "+C.border,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>{busy?<span style={{fontSize:10}}>...</span>:null}</div>
       <span style={{fontSize:12,fontWeight:600,color:C.text}}>Ik ben geen robot</span>
-    </div>
-    {/* Slider */}
-    <div ref={barRef} style={{position:"relative",height:40,margin:"0 14px 10px",background:"#e2e8f0",borderRadius:8,cursor:"pointer",overflow:"hidden",userSelect:"none",touchAction:"none"}}>
-      {/* Track fill */}
-      <div style={{position:"absolute",left:0,top:0,bottom:0,width:dragged+"%",background:dragged>=THRESHOLD?"#16a34a":"linear-gradient(90deg,#2563eb,#7c3aed)",borderRadius:8,transition:dragging?"none":"width .3s ease"}}/>
-      {/* Label */}
-      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,color:dragged>40?"white":C.sub,pointerEvents:"none",transition:"color .2s"}}>
-        {dragged>=THRESHOLD?"✓ Geverifieerd":"Schuif naar rechts →"}
-      </div>
-      {/* Thumb */}
-      <div 
-        onMouseDown={e=>{e.preventDefault();startDrag(e.clientX)}}
-        onTouchStart={e=>startDrag(e.touches[0].clientX)}
-        style={{
-          position:"absolute",left:"calc("+dragged+"% - 18px)",top:2,width:36,height:36,borderRadius:7,
-          background:"white",border:"2px solid "+(dragged>=THRESHOLD?"#16a34a":C.accent),
-          display:"flex",alignItems:"center",justifyContent:"center",
-          cursor:"grab",boxShadow:"0 2px 8px rgba(0,0,0,.12)",
-          transition:dragging?"none":"left .3s ease",
-          touchAction:"none",
-        }}>
-        <span style={{fontSize:14}}>{dragged>=THRESHOLD?"✓":"⟩⟩"}</span>
-      </div>
-    </div>
+      <img src="https://www.gstatic.com/recaptcha/api2/logo_48.png" alt="" style={{width:24,height:24,marginLeft:"auto"}}/>
+    </button>
   </div>;
 };
 
