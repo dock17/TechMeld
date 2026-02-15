@@ -1985,10 +1985,12 @@ function App(){
       if(user){
         try{
           const profile=await DB.getUserProfile(user.uid);
+          console.log("AUTH DEBUG: uid=",user.uid,"email=",user.email,"emailVerified=",user.emailVerified,"profile=",JSON.stringify(profile));
           var isSA=SUPER_ADMINS.includes(user.email);
           // Email verification check (skip for super admins and invited users)
           const isOrgOwner=profile&&profile.role==="admin";
           if(!isSA&&isOrgOwner&&!user.emailVerified){
+            console.log("AUTH DEBUG: needs verify");
             setNeedsVerify(true);setLoading(false);return;
           }
           setNeedsVerify(false);
@@ -1997,16 +1999,18 @@ function App(){
             setStore(p=>({...p,curUser:{id:user.uid,name:profile?.name||user.displayName||"Admin",email:user.email,role:"superadmin",av:profile?.avatar||(user.displayName||"A").slice(0,2).toUpperCase()}}));
             setAuthed(true);setPage("admin");
           }else if(profile&&profile.orgId){
+            console.log("AUTH DEBUG: setting orgId=",profile.orgId);
             setOrgId(profile.orgId);
             setStore(p=>({...p,curUser:{id:user.uid,name:profile.name||user.displayName,email:user.email,role:profile.role||"admin",av:profile.avatar||"U"}}));
             setAuthed(true);
           }else{
+            console.log("AUTH DEBUG: no profile or no orgId, falling back to demo");
             // New user without profile yet — set basic info
             setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||"Gebruiker",email:user.email,role:"admin",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
             setAuthed(true);
           }
         }catch(e){
-          console.error("Profile load error:",e);
+          console.error("AUTH DEBUG: Profile load error:",e);
           setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||user.email?.split("@")[0]||"Gebruiker",email:user.email,role:"admin",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
           setAuthed(true);
         }
