@@ -2039,7 +2039,10 @@ function App(){
   const[appLegalDoc,setAppLegalDoc]=useState(null);
   const[orgId,setOrgId]=useState(null);
   const[impersonating,setImpersonating]=useState(null); // {orgId,orgName} when super admin views a client
+  const isIos=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isInStandalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;
   const[showInstall,setShowInstall]=useState(false);
+  const[showIosInstall,setShowIosInstall]=useState(()=>{try{return isIos&&!isInStandalone&&!localStorage.getItem('tm_ios_dismissed')}catch(e){return false}});
   useEffect(()=>{
     const show=()=>setShowInstall(true);
     if(deferredPrompt)setShowInstall(true);
@@ -2054,6 +2057,7 @@ function App(){
     deferredPrompt=null;
   };
   const dismissInstall=()=>{setShowInstall(false);try{sessionStorage.setItem('tm_pwa_dismissed','1')}catch(e){}};
+  const dismissIos=()=>{setShowIosInstall(false);try{localStorage.setItem('tm_ios_dismissed','1')}catch(e){}};
   // Detect password reset link (from invite email) — must be checked before auth state
   const[appPwReset,setAppPwReset]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
@@ -2233,6 +2237,10 @@ function App(){
       React.createElement('div',{style:{flex:1}},React.createElement('div',{style:{fontWeight:700,fontSize:14,marginBottom:2}},"Installeer TechMeld"),React.createElement('div',{style:{fontSize:12,opacity:.85}},"Voeg toe aan je startscherm")),
       React.createElement('button',{onClick:handleInstall,style:{padding:"8px 16px",borderRadius:8,border:"none",background:"#fff",color:"#2563eb",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0}},"Installeer"),
       React.createElement('button',{onClick:dismissInstall,style:{position:"absolute",top:6,right:8,background:"none",border:"none",color:"rgba(255,255,255,.6)",fontSize:18,cursor:"pointer",lineHeight:1}},"×")),
+    showIosInstall&&React.createElement('div',{style:{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",borderRadius:16,padding:"16px 20px",boxShadow:"0 8px 32px rgba(37,99,235,.35)",maxWidth:360,width:"calc(100% - 32px)",animation:"slideUp .3s ease"}},
+      React.createElement('button',{onClick:dismissIos,style:{position:"absolute",top:8,right:10,background:"none",border:"none",color:"rgba(255,255,255,.6)",fontSize:18,cursor:"pointer",lineHeight:1}},"×"),
+      React.createElement('div',{style:{fontWeight:700,fontSize:15,marginBottom:8}},"Installeer TechMeld"),
+      React.createElement('div',{style:{fontSize:13,opacity:.9,lineHeight:1.5}},"Tik op ",React.createElement('svg',{width:16,height:16,viewBox:"0 0 24 24",fill:"none",stroke:"#fff",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",style:{verticalAlign:"middle",margin:"0 2px"}},React.createElement('path',{d:"M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"}),React.createElement('polyline',{points:"16 6 12 2 8 6"}),React.createElement('line',{x1:12,y1:2,x2:12,y2:15}))," (Deel) en kies ",React.createElement('strong',null,"'Zet op beginscherm'"))),
     React.createElement(Auth,{onLogin:function(){if(!firebaseReady)setAuthed(true)}}));
   if(!store.curUser)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg}}>
     <div style={{textAlign:"center"}}>
@@ -2311,6 +2319,12 @@ function App(){
       </div>
       <button onClick={handleInstall} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#fff",color:"#2563eb",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0}}>Installeer</button>
       <button onClick={dismissInstall} style={{position:"absolute",top:6,right:8,background:"none",border:"none",color:"rgba(255,255,255,.6)",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+    </div>}
+    {showIosInstall&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",borderRadius:16,padding:"16px 20px",boxShadow:"0 8px 32px rgba(37,99,235,.35)",maxWidth:360,width:"calc(100% - 32px)",animation:"slideUp .3s ease"}}>
+      <button onClick={dismissIos} style={{position:"absolute",top:8,right:10,background:"none",border:"none",color:"rgba(255,255,255,.6)",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>Installeer TechMeld</div>
+      <div style={{fontSize:13,opacity:.9,lineHeight:1.5}}>Tik op <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:"middle",margin:"0 2px"}}><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> (Deel) en kies <strong>'Zet op beginscherm'</strong></div>
+      <div style={{marginTop:8,textAlign:"center"}}><svg width="20" height="10" viewBox="0 0 20 10" fill="#fff"><polygon points="10,10 0,0 20,0"/></svg></div>
     </div>}
     <Sidebar active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub}/>
     <main className="main-content" style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
