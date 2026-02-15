@@ -779,7 +779,7 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
 // ═══════════════════════════════════════════
 const Sidebar=({active,onNav,user,onLogout,sub})=>{
   var isSA=SUPER_ADMINS.includes(user?.email);
-  var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.admin;
+  var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.reporter;
   const isGroep=sub?.plan==="groep";
   const items=isSA?[{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]:[{id:"dashboard",ic:"dashboard",l:"Dashboard"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuwe Melding"},{id:"building",ic:"building",l:"Gebouwen"},{id:"floorplans",ic:"floor",l:"Plattegronden"},{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)});
   if(!isSA&&SUPER_ADMINS.includes(user?.email))items.push({id:"admin",ic:"shield",l:"⚡ Admin"});
@@ -809,7 +809,7 @@ const Sidebar=({active,onNav,user,onLogout,sub})=>{
 
 const MobileNav=({active,onNav,user,onLogout,sub})=>{
   const[showMenu,setShowMenu]=useState(false);
-  var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.admin;
+  var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.reporter;
   const isGroep=sub?.plan==="groep";
   const items=[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}].filter(function(it){return it.id==="menu"||userPerms.includes(it.id)});
   var menuItems=[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(SUPER_ADMINS.includes(user?.email)?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
@@ -1638,44 +1638,44 @@ const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
 // ═══════════════════════════════════════════
 // SUPER ADMIN PANEL
 // ═══════════════════════════════════════════
-const SUPER_ADMINS=["tigrealata@hotmail.com"];
-const AdminPanel=({curUser})=>{
-  const[orgs,setOrgs]=useState([]);const[allUsers,setAllUsers]=useState([]);const[subs,setSubs]=useState([]);const[loading,setLoading]=useState(true);
-  const[confirm,setConfirm]=useState(null);
+const SUPER_ADMINS=["tigrealata@hotmail.com","admin@techmeld.eu","info@techmeld.eu"];
+const AdminPanel=({curUser,onImpersonate})=>{
+  const[orgs,setOrgs]=useState([]);const[allUsers,setAllUsers]=useState([]);const[subs,setSubs]=useState([]);const[trials,setTrials]=useState([]);const[loading,setLoading]=useState(true);
+  const[confirm,setConfirm]=useState(null);const[search,setSearch]=useState("");const[tab,setTab]=useState("orgs");
   useEffect(()=>{
     if(!firebaseReady)return;
     var unsubs=[];
     unsubs.push(db.collection('organizations').onSnapshot(function(snap){setOrgs(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}))}));
     unsubs.push(db.collection('users').onSnapshot(function(snap){setAllUsers(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}).filter(function(u){return !SUPER_ADMINS.includes(u.email)}))}));
     unsubs.push(db.collection('subscriptions').onSnapshot(function(snap){setSubs(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}))}));
+    unsubs.push(db.collection('trialHistory').onSnapshot(function(snap){setTrials(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}))}));
     setLoading(false);
     return function(){unsubs.forEach(function(u){u()})};
   },[]);
 
   var deleteUser=async function(userId,userEmail){
-    if(functions){
-      var fn=functions.httpsCallable("deleteUserAccount");
-      await fn({userId:userId,userEmail:userEmail});
-    }else{
-      await db.collection('users').doc(userId).delete();
-    }
+    if(functions){var fn=functions.httpsCallable("deleteUserAccount");await fn({userId:userId,userEmail:userEmail});}
+    else{await db.collection('users').doc(userId).delete();}
+    setConfirm(null);
+  };
+  var deleteOrg=async function(orgId){
+    if(functions){var fn=functions.httpsCallable("deleteOrganization");await fn({orgId:orgId});}
+    else{await db.collection('organizations').doc(orgId).delete();}
     setConfirm(null);
   };
 
-  var deleteOrg=async function(orgId){
-    if(functions){
-      var fn=functions.httpsCallable("deleteOrganization");
-      await fn({orgId:orgId});
-    }else{
-      await db.collection('organizations').doc(orgId).delete();
-    }
-    setConfirm(null);
-  };
+  const filteredOrgs=orgs.filter(o=>{const q=search.toLowerCase();if(!q)return true;const orgUsers=allUsers.filter(u=>u.orgId===o.id);return(o.name||"").toLowerCase().includes(q)||orgUsers.some(u=>(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q))});
+  const activeTrials=subs.filter(s=>s.status==="trial"&&s.trialEnd&&new Date(s.trialEnd)>new Date()).length;
+  const expiredTrials=subs.filter(s=>(s.status==="expired")||(s.status==="trial"&&s.trialEnd&&new Date(s.trialEnd)<new Date())).length;
+  const activePaid=subs.filter(s=>s.status==="active").length;
 
   if(loading)return <div style={{padding:20}}>Laden...</div>;
-  return <div style={{padding:"20px 16px",maxWidth:900}}>
-    <h2 style={{fontSize:22,fontWeight:800,marginBottom:4}}>Admin Panel</h2>
-    <p style={{fontSize:12,color:C.sub,marginBottom:20}}>Overzicht van alle organisaties en gebruikers</p>
+  return <div style={{padding:"20px 16px",maxWidth:960}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+      <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#dc2626,#b91c1c)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="shield" size={20} color="white"/></div>
+      <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>TechMeld Admin</h2><p style={{fontSize:11,color:C.dim,margin:0}}>{curUser.email}</p></div>
+    </div>
+    <p style={{fontSize:12,color:C.sub,marginBottom:16}}>Beheer alle organisaties, gebruikers en abonnementen</p>
 
     {/* Confirm dialog */}
     {confirm&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -1689,41 +1689,67 @@ const AdminPanel=({curUser})=>{
       </div>
     </div>}
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:20}}>
-      {[["Organisaties",orgs.length,C.accent],["Gebruikers",allUsers.length,"#7c3aed"],["Abonnementen",subs.length,"#16a34a"]].map(function(s){return <div key={s[0]} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:14,textAlign:"center"}}>
-        <div style={{fontSize:28,fontWeight:800,color:s[2]}}>{s[1]}</div>
-        <div style={{fontSize:11,color:C.sub}}>{s[0]}</div>
+    {/* Stats */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:16}}>
+      {[["Organisaties",orgs.length,C.accent,"building"],["Gebruikers",allUsers.length,"#7c3aed","users"],["Actieve trials",activeTrials,"#d97706","time"],["Betaald",activePaid,"#16a34a","crown"],["Verlopen",expiredTrials,"#dc2626","close"]].map(function(s){return <div key={s[0]} style={{background:C.card,borderRadius:10,border:"1px solid "+C.border,padding:12,textAlign:"center"}}>
+        <Icon name={s[3]} size={16} color={s[2]}/>
+        <div style={{fontSize:24,fontWeight:800,color:s[2],marginTop:2}}>{s[1]}</div>
+        <div style={{fontSize:10,color:C.sub}}>{s[0]}</div>
       </div>})}
     </div>
-    <h3 style={{fontSize:15,fontWeight:700,marginBottom:10}}>Organisaties</h3>
-    {orgs.map(function(org){
+
+    {/* Search + tabs */}
+    <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{flex:1,minWidth:180}}><Inp value={search} onChange={setSearch} placeholder="Zoek organisatie, gebruiker of email..."/></div>
+      {[["orgs","Organisaties"],["users","Alle gebruikers"],["trials","Trial historie"]].map(t=><button key={t[0]} onClick={()=>setTab(t[0])} style={{padding:"6px 12px",borderRadius:6,border:"1px solid "+(tab===t[0]?C.accent:C.border),background:tab===t[0]?C.accentBg:C.card,color:tab===t[0]?C.accent:C.sub,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t[1]}</button>)}
+    </div>
+
+    {/* Orgs tab */}
+    {tab==="orgs"&&<>{filteredOrgs.map(function(org){
       var orgUsers=allUsers.filter(function(u){return u.orgId===org.id});
       var sub=subs.find(function(s){return s.id===org.id||s.orgId===org.id});
       var plan=sub?PLANS.find(function(p){return p.id===sub.plan}):null;
       var expired=(sub?.status==="trial"||sub?.status==="expired")&&sub.trialEnd&&new Date(sub.trialEnd)<new Date();
-      return <div key={org.id} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:12}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <div><div style={{fontSize:15,fontWeight:700}}>{org.name||"Geen naam"}</div><div style={{fontSize:11,color:C.dim}}>{org.type||"Onbekend type"} · ID: {org.id.slice(0,8)}...</div></div>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
+      var trialDays=sub?.trialEnd?Math.ceil((new Date(sub.trialEnd)-new Date())/(864e5)):null;
+      return <div key={org.id} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:6}}>
+          <div><div style={{fontSize:15,fontWeight:700}}>{org.name||"Geen naam"}</div><div style={{fontSize:11,color:C.dim}}>{org.type||"Onbekend"} · {orgUsers.length} gebruiker(s) · ID: {org.id.slice(0,8)}</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
             {plan&&<Tag c={plan.color} bg={plan.color+"15"}>{plan.name}</Tag>}
-            {sub?.status==="trial"&&!expired&&<Tag c="#d97706" bg="#fef3c7">Trial</Tag>}
+            {sub?.status==="trial"&&!expired&&<Tag c="#d97706" bg="#fef3c7">Trial ({trialDays}d)</Tag>}
             {expired&&<Tag c="#dc2626" bg="#fef2f2">Verlopen</Tag>}
             {sub?.status==="active"&&<Tag c="#16a34a" bg="#f0fdf4">Actief</Tag>}
-            <button onClick={function(){setConfirm({title:"Organisatie verwijderen?",msg:"Dit verwijdert "+org.name+", alle meldingen, facturen, accounts en "+orgUsers.length+" gebruiker(s). Dit kan niet ongedaan worden!",action:function(){deleteOrg(org.id)}})}} style={{width:28,height:28,borderRadius:6,border:"1px solid #fecaca",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="delete" size={14} color="#dc2626"/></button>
+            <button onClick={function(){onImpersonate(org.id,org.name)}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+C.accent,background:C.accentBg,cursor:"pointer",fontSize:10,fontWeight:600,color:C.accent,display:"flex",alignItems:"center",gap:4}} title="Bekijk als deze organisatie"><Icon name="users" size={12} color={C.accent}/>Bekijk</button>
+            <button onClick={function(){setConfirm({title:"Organisatie verwijderen?",msg:"Dit verwijdert "+org.name+", alle meldingen, facturen, accounts en "+orgUsers.length+" gebruiker(s). Dit kan niet ongedaan worden!",action:function(){deleteOrg(org.id)}})}} style={{width:26,height:26,borderRadius:6,border:"1px solid #fecaca",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="delete" size={13} color="#dc2626"/></button>
           </div>
         </div>
-        {sub?.trialEnd&&<div style={{fontSize:11,color:C.dim,marginBottom:6}}>Trial tot: {fmtDate(sub.trialEnd)}</div>}
-        <div style={{fontSize:12,fontWeight:600,color:C.sub,marginBottom:4}}>Gebruikers ({orgUsers.length})</div>
-        {orgUsers.map(function(u){return <div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:"1px solid "+C.border}}>
-          <div style={{width:24,height:24,borderRadius:6,background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:C.accent}}>{u.avatar||"?"}</div>
-          <div style={{flex:1}}><span style={{fontSize:12,fontWeight:600}}>{u.name}</span><span style={{fontSize:11,color:C.dim,marginLeft:6}}>{u.email}</span></div>
-          <span style={{fontSize:10,color:C.dim,textTransform:"capitalize",marginRight:6}}>{u.role}</span>
-          <button onClick={function(){setConfirm({title:"Gebruiker verwijderen?",msg:"Verwijder "+u.name+" ("+u.email+") volledig uit het systeem, inclusief het Auth-account.",action:function(){deleteUser(u.id,u.email)}})}} style={{width:24,height:24,borderRadius:5,border:"1px solid #fecaca",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="delete" size={12} color="#dc2626"/></button>
-        </div>})}
-        {orgUsers.length===0&&<div style={{fontSize:11,color:C.dim}}>Geen gebruikers gevonden</div>}
+        {sub?.trialEnd&&<div style={{fontSize:10,color:expired?"#dc2626":C.dim,marginBottom:6}}>{expired?"Verlopen op":"Trial tot"}: {fmtDate(sub.trialEnd)}{sub?.expiresAt?" · Betaald tot: "+fmtDate(sub.expiresAt):""}</div>}
+        {orgUsers.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{orgUsers.map(function(u){return <div key={u.id} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",background:"#f8fafc",borderRadius:5,border:"1px solid "+C.border}}>
+          <div style={{width:18,height:18,borderRadius:4,background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,fontWeight:700,color:C.accent}}>{u.avatar||"?"}</div>
+          <span style={{fontSize:10,fontWeight:500}}>{u.name||u.email}</span>
+          <span style={{fontSize:8,color:C.dim,textTransform:"capitalize"}}>{u.role||"?"}</span>
+          <button onClick={function(){setConfirm({title:"Gebruiker verwijderen?",msg:"Verwijder "+u.name+" ("+u.email+") volledig.",action:function(){deleteUser(u.id,u.email)}})}} style={{width:14,height:14,borderRadius:3,border:"none",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><Icon name="close" size={8} color="#dc2626"/></button>
+        </div>})}</div>}
       </div>
     })}
-    {orgs.length===0&&<div style={{textAlign:"center",padding:30,color:C.dim}}>Nog geen organisaties</div>}
+    {filteredOrgs.length===0&&<div style={{textAlign:"center",padding:30,color:C.dim}}>Geen resultaten</div>}</>}
+
+    {/* Users tab */}
+    {tab==="users"&&<div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,overflow:"hidden"}}>{allUsers.filter(u=>{const q=search.toLowerCase();return!q||(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q)}).map(function(u,i){const org=orgs.find(o=>o.id===u.orgId);return <div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderBottom:"1px solid "+C.border}}>
+      <div style={{width:24,height:24,borderRadius:6,background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:C.accent}}>{u.avatar||"?"}</div>
+      <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600}}>{u.name||"Onbekend"}</div><div style={{fontSize:10,color:C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.email}</div></div>
+      <span style={{fontSize:9,color:C.dim,textTransform:"capitalize"}}>{u.role||"?"}</span>
+      {org&&<span style={{fontSize:9,color:C.accent,background:C.accentBg,padding:"2px 6px",borderRadius:4}}>{org.name}</span>}
+      <button onClick={function(){setConfirm({title:"Verwijderen?",msg:"Verwijder "+u.name+" ("+u.email+").",action:function(){deleteUser(u.id,u.email)}})}} style={{width:22,height:22,borderRadius:5,border:"1px solid #fecaca",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="delete" size={11} color="#dc2626"/></button>
+    </div>})}
+    {allUsers.length===0&&<div style={{padding:20,textAlign:"center",color:C.dim}}>Geen gebruikers</div>}</div>}
+
+    {/* Trial history tab */}
+    {tab==="trials"&&<div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,overflow:"hidden"}}>{trials.map(function(t,i){return <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderBottom:"1px solid "+C.border}}>
+      <Icon name="time" size={14} color="#d97706"/>
+      <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{t.email}</div><div style={{fontSize:10,color:C.dim}}>{t.orgName} · {t.registeredAt?fmtDate(t.registeredAt):""}</div></div>
+    </div>})}
+    {trials.length===0&&<div style={{padding:20,textAlign:"center",color:C.dim}}>Geen trial historie</div>}</div>}
   </div>;
 };
 
@@ -2005,6 +2031,7 @@ function App(){
   const[toasts,setToasts]=useState([]);const[loading,setLoading]=useState(true);
   const[appLegalDoc,setAppLegalDoc]=useState(null);
   const[orgId,setOrgId]=useState(null);
+  const[impersonating,setImpersonating]=useState(null); // {orgId,orgName} when super admin views a client
   // Detect password reset link (from invite email) — must be checked before auth state
   const[appPwReset,setAppPwReset]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
@@ -2213,12 +2240,14 @@ function App(){
 
   const cur=detId?store.meldingen.find(m=>m.id===detId):null;
 
-  var curPerms=store.curUser?.perms||DEFAULT_PERMS[store.curUser?.role]||DEFAULT_PERMS.admin;
+  var curPerms=store.curUser?.perms||DEFAULT_PERMS[store.curUser?.role]||DEFAULT_PERMS.reporter;
+  const handleImpersonate=(oid,oname)=>{setImpersonating({orgId:oid,orgName:oname});setOrgId(oid);setPage("dashboard")};
+  const stopImpersonate=()=>{setImpersonating(null);setOrgId(null);setPage("admin")};
   const pg=()=>{
-    // Super admin — always show Admin Panel
-    if(isSuperAdmin)return <AdminPanel curUser={store.curUser}/>;
+    // Super admin — show Admin Panel unless impersonating
+    if(isSuperAdmin&&!impersonating)return <AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>;
     // Permission check — redirect to dashboard if no access
-    if(page!=="detail"&&page!=="billing"&&page!=="admin"&&page!=="dashboard"&&!curPerms.includes(page)){
+    if(page!=="detail"&&page!=="billing"&&page!=="admin"&&page!=="dashboard"&&!curPerms.includes(page)&&!isSuperAdmin){
       return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
     }
     if(page==="detail"&&cur)return <Detail mel={cur} org={store.org} users={store.users} cur={store.curUser} onBack={()=>nav("meldingen")} onUpdate={updMel} onNotify={notify}/>;
@@ -2227,7 +2256,7 @@ function App(){
       case"dashboard":return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
       case"meldingen":return <MeldingenList mel={store.meldingen} org={store.org} sub={store.sub} cur={store.curUser} orgId={orgId} onNav={nav} onNotify={notify}/>;
       case"new":return <NewMeld org={store.org} users={store.users} cur={store.curUser} sub={store.sub} onSubmit={addMel} onNav={nav} onNotify={notify}/>;
-      case"building":return <Building org={store.org} sub={store.sub} role={store.curUser?.role} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{buildings:o.buildings||[],floors:o.floors,rooms:o.rooms}).catch(e=>console.error(e))}} onNotify={notify}/>;
+      case"building":return <Building org={store.org} sub={store.sub} role={isSuperAdmin?"admin":store.curUser?.role} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{buildings:o.buildings||[],floors:o.floors,rooms:o.rooms}).catch(e=>console.error(e))}} onNotify={notify}/>;
       case"floorplans":return <FloorPlans org={store.org} orgId={orgId} onNotify={notify}/>;
       case"rapportage":return <Rapportage mel={store.meldingen} org={store.org} users={store.users} onNotify={notify}/>;
       case"groep":return <GroepDashboard org={store.org} orgId={orgId} sub={store.sub} onNav={nav} onNotify={notify}/>;
@@ -2235,7 +2264,7 @@ function App(){
       case"vergelijk":return <VergelijkendeRapportage org={store.org} orgId={orgId} onNotify={notify}/>;
       case"users":return <Users users={store.users} cur={store.curUser} orgId={orgId} sub={store.sub} onUpd={u=>setStore(p=>({...p,users:u}))} onNotify={notify}/>;
       case"settings":return <Settings org={store.org} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{name:o.name,type:o.type}).catch(e=>console.error(e))}} onNotify={notify} onNav={nav}/>;
-      case"admin":return SUPER_ADMINS.includes(store.curUser?.email)?<AdminPanel curUser={store.curUser}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+      case"admin":return SUPER_ADMINS.includes(store.curUser?.email)?<AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
       default:return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
     }
   };
@@ -2245,6 +2274,10 @@ function App(){
     {appLegalDoc&&<LegalModal doc={appLegalDoc} onClose={function(){setAppLegalDoc(null)}}/>}
     <Sidebar active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub}/>
     <main className="main-content" style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
+      {impersonating&&<div style={{background:"linear-gradient(90deg,#dc2626,#b91c1c)",color:"#fff",padding:"6px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}><Icon name="users" size={14} color="#fff"/><span style={{fontSize:12,fontWeight:600}}>Je bekijkt: {impersonating.orgName}</span></div>
+        <button onClick={stopImpersonate} style={{padding:"3px 10px",borderRadius:5,border:"1px solid rgba(255,255,255,.3)",background:"rgba(255,255,255,.15)",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer"}}>← Terug naar Admin</button>
+      </div>}
       <div style={{flex:1}}>{pg()}</div>
       <div style={{padding:"8px 14px",borderTop:"1px solid "+C.border,textAlign:"center",flexShrink:0,background:"#fff"}}>
         <div style={{fontSize:9,color:C.dim,display:"flex",alignItems:"center",justifyContent:"center",gap:5,flexWrap:"wrap"}}>
