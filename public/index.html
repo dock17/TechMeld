@@ -466,7 +466,7 @@ const Toast=({items,onDismiss})=>items.length?<div style={{position:"fixed",top:
 </div>:null;
 
 // ── Data ──
-const mkStore=()=>({
+const DEMO_STORE={
   org:{id:"org1",name:"Sint-Jozef Ziekenhuis",type:"hospital",
     buildings:[{id:"b1",name:"Hoofdgebouw"},{id:"b2",name:"Polikliniek"}],
     floors:[{id:"f0",name:"Kelder",nr:-1,bId:"b1"},{id:"f1",name:"Begane Grond",nr:0,bId:"b1"},{id:"f2",name:"1e Verdieping",nr:1,bId:"b1"},{id:"f3",name:"2e Verdieping",nr:2,bId:"b1"},{id:"f4",name:"3e Verdieping",nr:3,bId:"b1"},{id:"f5",name:"Begane Grond",nr:0,bId:"b2"},{id:"f6",name:"1e Verdieping",nr:1,bId:"b2"}],
@@ -483,7 +483,15 @@ const mkStore=()=>({
   curUser:null,
   sub:{plan:"professional",status:"trial",trialEnd:new Date(Date.now()+14*864e5).toISOString()},
   invoices:[{id:"inv-001",date:"2026-02-11",plan:"Professional",amount:89,status:"proef",method:"-"}],
-});
+};
+const mkStore=()=>firebaseReady?{
+  org:{id:null,name:"",type:"",buildings:[],floors:[],rooms:[]},
+  users:[],
+  meldingen:[],
+  curUser:null,
+  sub:{plan:"starter",status:"none",trialEnd:null},
+  invoices:[],
+}:{...DEMO_STORE};
 
 // ═══════════════════════════════════════════
 // TRIAL BANNER
@@ -1895,6 +1903,9 @@ const Auth=({onLogin})=>{
           catch(e){setErr(e.message||"Dit e-mailadres heeft al een proefperiode gehad.");setBusy(false);return}
         }
         await DB.register(form.email,form.pw,form.name,form.org,form.type);
+        // Force reload so onAuthStateChanged picks up the new Firestore profile
+        window.location.reload();
+        return;
       }else{
         if(!form.email||!form.pw){setErr("Vul e-mail en wachtwoord in.");setBusy(false);return}
         // Invisible reCAPTCHA check for login (soft check — don't block on failure)
@@ -1984,13 +1995,17 @@ function App(){
     const unsub=auth.onAuthStateChanged(async(user)=>{
       if(user){
         try{
-          const profile=await DB.getUserProfile(user.uid);
-          console.log("AUTH DEBUG: uid=",user.uid,"email=",user.email,"emailVerified=",user.emailVerified,"profile=",JSON.stringify(profile));
+          let profile=await DB.getUserProfile(user.uid);
+          // Profile might not exist yet right after registration — retry once
+          if(!profile){
+            await new Promise(r=>setTimeout(r,1500));
+            profile=await DB.getUserProfile(user.uid);
+          }
           var isSA=SUPER_ADMINS.includes(user.email);
           // Email verification check (skip for super admins and invited users)
           const isOrgOwner=profile&&profile.role==="admin";
           if(!isSA&&isOrgOwner&&!user.emailVerified){
-            console.log("AUTH DEBUG: needs verify");
+            setOrgId(profile.orgId);
             setNeedsVerify(true);setLoading(false);return;
           }
           setNeedsVerify(false);
@@ -1999,18 +2014,17 @@ function App(){
             setStore(p=>({...p,curUser:{id:user.uid,name:profile?.name||user.displayName||"Admin",email:user.email,role:"superadmin",av:profile?.avatar||(user.displayName||"A").slice(0,2).toUpperCase()}}));
             setAuthed(true);setPage("admin");
           }else if(profile&&profile.orgId){
-            console.log("AUTH DEBUG: setting orgId=",profile.orgId);
             setOrgId(profile.orgId);
             setStore(p=>({...p,curUser:{id:user.uid,name:profile.name||user.displayName,email:user.email,role:profile.role||"admin",av:profile.avatar||"U"}}));
             setAuthed(true);
           }else{
-            console.log("AUTH DEBUG: no profile or no orgId, falling back to demo");
-            // New user without profile yet — set basic info
+            // No profile found — show error, don't fall back to demo data
+            console.error("No Firestore profile found for user:",user.uid);
             setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||"Gebruiker",email:user.email,role:"admin",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
             setAuthed(true);
           }
         }catch(e){
-          console.error("AUTH DEBUG: Profile load error:",e);
+          console.error("Profile load error:",e);
           setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||user.email?.split("@")[0]||"Gebruiker",email:user.email,role:"admin",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
           setAuthed(true);
         }
