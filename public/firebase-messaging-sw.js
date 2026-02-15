@@ -14,14 +14,17 @@ var messaging = firebase.messaging();
 
 // Handle background FCM messages
 messaging.onBackgroundMessage(function(payload) {
-  var title = payload.notification?.title || payload.data?.title || 'TechMeld';
-  var body = payload.notification?.body || payload.data?.body || 'Nieuwe melding';
+  var d = payload.data || {};
+  var title = d.title || 'TechMeld';
+  var body = d.body || 'Nieuwe melding';
+  var tag = d.tag || 'techmeld-' + Date.now();
   return self.registration.showNotification(title, {
     body: body,
     icon: '/favicon.ico',
     badge: '/favicon.ico',
+    tag: tag,
     vibrate: [200, 100, 200],
-    data: { url: '/' }
+    data: { url: d.link || '/' }
   });
 });
 

@@ -6,14 +6,18 @@ const nodemailer = require("nodemailer");
 admin.initializeApp();
 const db = admin.firestore();
 
-const transporter = nodemailer.createTransport({
-  host: "smtp-auth.mailprotect.be",
-  port: 587,
-  secure: false,
-  auth: { user: process.env.EMAIL_USER || "info@techmeld.eu", pass: process.env.EMAIL_PASS || "" },
-  tls: { rejectUnauthorized: false },
-});
-const FROM = `TechMeld <${process.env.EMAIL_USER || "info@techmeld.eu"}>`;
+const EMAIL_USER = "info@techmeld.eu";
+
+function getTransporter() {
+  return nodemailer.createTransport({
+    host: "smtp-auth.mailprotect.be",
+    port: 587,
+    secure: false,
+    auth: { user: EMAIL_USER, pass: process.env.EMAIL_PASS },
+    tls: { rejectUnauthorized: false },
+  });
+}
+const FROM = `TechMeld <${EMAIL_USER}>`;
 const PRIO = { critical:{l:"Kritiek",c:"#dc2626",b:"#fef2f2"}, high:{l:"Hoog",c:"#ea580c",b:"#fff7ed"}, medium:{l:"Normaal",c:"#2563eb",b:"#eff6ff"}, low:{l:"Laag",c:"#16a34a",b:"#f0fdf4"} };
 const STL = { open:"Open", in_progress:"In Behandeling", resolved:"Opgelost", closed:"Gesloten" };
 
@@ -32,7 +36,22 @@ function buildEmail(type, mel, org, reporter, assigned, comment) {
 
 async function getUsers(orgId) { const s=await db.collection("users").where("orgId","==",orgId).get(); return s.docs.map(d=>({id:d.id,...d.data()})); }
 
-exports.onNewMelding = onDocumentCreated({document:"organizations/{orgId}/meldingen/{meldingId}",region:"europe-west1"}, async(event)=>{
+async function sendFCM(userIds, title, body, tag) {
+  if(!userIds.length)return;
+  const snap=await db.collection("fcmTokens").where("userId","in",userIds.slice(0,10)).get();
+  // Deduplicate: only send to one token per user
+  const seen=new Set();
+  const tokens=[];
+  snap.forEach(d=>{
+    const uid=d.data().userId;
+    if(!seen.has(uid)){seen.add(uid);tokens.push(d.data().token);}
+  });
+  const ntag=tag||("tm-"+Date.now());
+  const sends=tokens.map(t=>admin.messaging().send({token:t,data:{title,body,tag:ntag,link:"https://techmeld.eu"}}).catch(()=>{}));
+  if(sends.length)await Promise.all(sends);
+}
+
+exports.onNewMelding = onDocumentCreated({document:"organizations/{orgId}/meldingen/{meldingId}",region:"europe-west1",secrets:["EMAIL_PASS"]}, async(event)=>{
   const mel=event.data.data(), orgId=event.params.orgId;
   try{
     const users=await getUsers(orgId);
@@ -44,12 +63,15 @@ exports.onNewMelding = onDocumentCreated({document:"organizations/{orgId}/meldin
     else{to=users.filter(u=>(u.role==="technician"||u.role==="admin")&&u.email&&u.id!==mel.by).map(u=>u.email);}
     if(!to.length)return;
     const{subject,html}=buildEmail("new",mel,org,rep?.name,an);
-    await Promise.all(to.map(t=>transporter.sendMail({from:FROM,to:t,subject,html})));
-    console.log(`✅ Email verstuurd: ${mel.title} → ${to.length} ontvanger(s)`);
+    await Promise.all(to.map(t=>getTransporter().sendMail({from:FROM,to:t,subject,html})));
+    // Send FCM push to assigned user or all technicians/admins
+    const pushIds=mel.to?[mel.to]:users.filter(u=>(u.role==="technician"||u.role==="admin")&&u.id!==mel.by).map(u=>u.id);
+    await sendFCM(pushIds,"🔧 Nieuwe melding",mel.title+(rep?" - van "+rep.name:""));
+    console.log(`✅ Email+Push verstuurd: ${mel.title} → ${to.length} ontvanger(s)`);
   }catch(e){console.error("❌",e);}
 });
 
-exports.onMeldingUpdate = onDocumentUpdated({document:"organizations/{orgId}/meldingen/{meldingId}",region:"europe-west1"}, async(event)=>{
+exports.onMeldingUpdate = onDocumentUpdated({document:"organizations/{orgId}/meldingen/{meldingId}",region:"europe-west1",secrets:["EMAIL_PASS"]}, async(event)=>{
   const before=event.data.before.data(), after=event.data.after.data(), orgId=event.params.orgId;
   const sc=before.status!==after.status, ac=before.to!==after.to&&after.to, nc=(after.comments||[]).length>(before.comments||[]).length;
   if(!sc&&!ac&&!nc)return;
@@ -59,13 +81,22 @@ exports.onMeldingUpdate = onDocumentUpdated({document:"organizations/{orgId}/mel
     const org=orgDoc.exists?orgDoc.data():{};
     const rep=users.find(u=>u.id===after.by), asgn=users.find(u=>u.id===after.to);
     const r=new Set();let type="status",comment=null;
-    if(sc){if(rep?.email)r.add(rep.email);if(asgn?.email)r.add(asgn.email);}
+    if(sc){if(rep?.email)r.add(rep.email);type="status";}
     if(ac&&!sc){if(asgn?.email)r.add(asgn.email);type="assigned";}
     if(nc){if(rep?.email)r.add(rep.email);if(asgn?.email)r.add(asgn.email);type="comment";const c=after.comments||[];comment=c[c.length-1]?.text;const cm=users.find(u=>u.id===c[c.length-1]?.uId);if(cm?.email)r.delete(cm.email);}
     if(!r.size)return;
     const{subject,html}=buildEmail(type,after,org,rep?.name,asgn?.name,comment);
-    await Promise.all([...r].map(t=>transporter.sendMail({from:FROM,to:t,subject,html})));
-    console.log(`✅ ${type} email: ${after.title} → ${r.size} ontvanger(s)`);
+    await Promise.all([...r].map(t=>getTransporter().sendMail({from:FROM,to:t,subject,html})));
+    // Send FCM push to relevant users
+    const pushIds=[];
+    if(ac&&asgn)pushIds.push(asgn.id);
+    if(sc&&rep)pushIds.push(rep.id);
+    if(nc){if(rep)pushIds.push(rep.id);if(asgn)pushIds.push(asgn.id);const c=after.comments||[];const cmId=c[c.length-1]?.uId;const idx=pushIds.indexOf(cmId);if(idx>=0)pushIds.splice(idx,1);}
+    const uniqueIds=[...new Set(pushIds)];
+    const pushTitle=type==="assigned"?"👤 Toegewezen":type==="status"?"📋 Status gewijzigd":type==="comment"?"💬 Nieuwe reactie":"📋 Update";
+    const pushBody=after.title+(type==="status"?" → "+(STL[after.status]||""):type==="comment"&&comment?" - "+comment.slice(0,80):"");
+    if(uniqueIds.length)await sendFCM(uniqueIds,pushTitle,pushBody);
+    console.log(`✅ ${type} email+push: ${after.title} → ${r.size} ontvanger(s)`);
   }catch(e){console.error("❌",e);}
 });
 
@@ -77,6 +108,18 @@ exports.inviteUser = onCall({region:"europe-west1"}, async(req)=>{
   catch(e){if(e.code==="auth/email-already-exists")ur=await admin.auth().getUserByEmail(email);else throw new HttpsError("internal",e.message);}
   await db.collection("users").doc(ur.uid).set({name,email,role:role||"reporter",orgId,avatar:name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),createdAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
   return{uid:ur.uid,email};
+});
+
+const ROLE_LABELS={admin:"Beheerder",technician:"Technicus",reporter:"Melder"};
+
+exports.updateUserRole = onCall({region:"europe-west1"}, async(req)=>{
+  const{userId,role,perms}=req.data;
+  if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
+  if(!userId||!role)throw new HttpsError("invalid-argument","userId en role zijn vereist");
+  const allowed=["admin","technician","reporter"];
+  if(!allowed.includes(role))throw new HttpsError("invalid-argument","Ongeldig rol");
+  await db.collection("users").doc(userId).update({role,perms:perms||[]});
+  return{success:true};
 });
 
 exports.deleteUserAccount = onCall({region:"europe-west1"}, async(req)=>{
