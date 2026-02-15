@@ -198,6 +198,16 @@ const DB = {
       orgId: orgRef.id,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
+    // Save trial history for anti-abuse
+    const emailKey = email.toLowerCase().replace(/[.#$/\[\]]/g,'_');
+    await db.collection('trialHistory').doc(emailKey).set({
+      email: email.toLowerCase(),
+      orgName: orgName,
+      orgId: orgRef.id,
+      registeredAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    // Send email verification
+    await cred.user.sendEmailVerification();
     return cred.user;
   },
 
@@ -424,6 +434,7 @@ const Icon=({name,size=20,color="currentColor"})=>{
     groep:"M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z",
     locatie:"M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
     vergelijk:"M10 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h5v2h2V1h-2v2zm0 15H5l5-6v6zm4-15v2h5v14h-5v2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-5z",
+    mail:"M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z",
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d={d[name]||d.dashboard}/></svg>;
 };
@@ -1677,7 +1688,7 @@ const AdminPanel=({curUser})=>{
       var orgUsers=allUsers.filter(function(u){return u.orgId===org.id});
       var sub=subs.find(function(s){return s.id===org.id||s.orgId===org.id});
       var plan=sub?PLANS.find(function(p){return p.id===sub.plan}):null;
-      var expired=sub?.status==="trial"&&sub.trialEnd&&new Date(sub.trialEnd)<new Date();
+      var expired=(sub?.status==="trial"||sub?.status==="expired")&&sub.trialEnd&&new Date(sub.trialEnd)<new Date();
       return <div key={org.id} style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div><div style={{fontSize:15,fontWeight:700}}>{org.name||"Geen naam"}</div><div style={{fontSize:11,color:C.dim}}>{org.type||"Onbekend type"} · ID: {org.id.slice(0,8)}...</div></div>
@@ -1853,6 +1864,40 @@ const CookieBanner=()=>{
 };
 
 // ═══════════════════════════════════════════
+// EMAIL VERIFICATION SCREEN
+// ═══════════════════════════════════════════
+const EmailVerifyScreen=({onVerified,onLogout})=>{
+  const[busy,setBusy]=useState(false);const[sent,setSent]=useState(false);const[err,setErr]=useState("");
+  const resend=async()=>{
+    setBusy(true);setErr("");
+    try{await auth.currentUser.sendEmailVerification();setSent(true);setTimeout(()=>setSent(false),5000)}
+    catch(e){setErr(e.code==="auth/too-many-requests"?"Te veel verzoeken. Probeer later opnieuw.":"Fout: "+e.message)}
+    setBusy(false);
+  };
+  const checkVerified=async()=>{
+    setBusy(true);setErr("");
+    try{await auth.currentUser.reload();if(auth.currentUser.emailVerified){onVerified()}else{setErr("E-mail is nog niet geverifieerd. Controleer uw inbox.")}}
+    catch(e){setErr("Fout: "+e.message)}
+    setBusy(false);
+  };
+  return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(155deg,#eff6ff 0%,#f8fafc 40%,#faf5ff 100%)",padding:20}}>
+    <div style={{background:"#fff",borderRadius:20,border:"1px solid "+C.border,padding:"40px 30px",maxWidth:460,textAlign:"center",boxShadow:"0 16px 48px rgba(0,0,0,.06)"}}>
+      <div style={{width:64,height:64,borderRadius:16,background:"linear-gradient(135deg,#dbeafe,#bfdbfe)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+        <Icon name="mail" size={32} color="#2563eb"/>
+      </div>
+      <h2 style={{fontSize:22,fontWeight:800,margin:"0 0 8px"}}>Verifieer uw e-mail</h2>
+      <p style={{fontSize:14,color:C.sub,lineHeight:1.6,margin:"0 0 6px"}}>Controleer uw inbox en klik op de verificatielink.</p>
+      <p style={{fontSize:12,color:C.dim,lineHeight:1.5,margin:"0 0 20px"}}>Er is een verificatie-e-mail verstuurd naar <strong>{auth.currentUser?.email}</strong></p>
+      {err&&<div style={{padding:"7px 10px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:6,marginBottom:12,fontSize:11,color:"#dc2626",fontWeight:500}}>{err}</div>}
+      {sent&&<div style={{padding:"7px 10px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:6,marginBottom:12,fontSize:11,color:"#16a34a",fontWeight:500}}>Verificatie-e-mail opnieuw verstuurd!</div>}
+      <Btn onClick={checkVerified} disabled={busy} sx={{width:"100%",padding:"10px",fontSize:13,marginBottom:8}}>{busy?"Even geduld...":"Ik heb geverifieerd"}</Btn>
+      <button onClick={resend} disabled={busy} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px solid "+C.border,background:"transparent",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:600}}>Verificatie-e-mail opnieuw versturen</button>
+      <button onClick={onLogout} style={{marginTop:14,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:12}}>Uitloggen</button>
+    </div>
+  </div>;
+};
+
+// ═══════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════
 const Auth=({onLogin})=>{
@@ -1880,6 +1925,12 @@ const Auth=({onLogin})=>{
       if(mode==="register"){
         if(!form.name||!form.org||!form.email||!form.pw){setErr("Vul alle velden in.");setBusy(false);return}
         if(form.pw.length<6){setErr("Wachtwoord moet minstens 6 tekens zijn.");setBusy(false);return}
+        // Anti-abuse: check if email already used a trial
+        if(firebaseReady){
+          const emailKey=form.email.toLowerCase().replace(/[.#$/\[\]]/g,'_');
+          const trialDoc=await db.collection('trialHistory').doc(emailKey).get();
+          if(trialDoc.exists){setErr("Dit e-mailadres heeft al een proefperiode gehad.");setBusy(false);return}
+        }
         await DB.register(form.email,form.pw,form.name,form.org,form.type);
       }else{
         if(!form.email||!form.pw){setErr("Vul e-mail en wachtwoord in.");setBusy(false);return}
@@ -1955,6 +2006,7 @@ function App(){
   const[toasts,setToasts]=useState([]);const[loading,setLoading]=useState(true);
   const[appLegalDoc,setAppLegalDoc]=useState(null);
   const[orgId,setOrgId]=useState(null);
+  const[needsVerify,setNeedsVerify]=useState(false);
 
   // Firebase Auth State Listener
   useEffect(()=>{
@@ -1964,6 +2016,12 @@ function App(){
         try{
           const profile=await DB.getUserProfile(user.uid);
           var isSA=SUPER_ADMINS.includes(user.email);
+          // Email verification check (skip for super admins and invited users)
+          const isOrgOwner=profile&&profile.role==="admin";
+          if(!isSA&&isOrgOwner&&!user.emailVerified){
+            setNeedsVerify(true);setLoading(false);return;
+          }
+          setNeedsVerify(false);
           if(isSA){
             // Super admin — no org needed
             setStore(p=>({...p,curUser:{id:user.uid,name:profile?.name||user.displayName||"Admin",email:user.email,role:"superadmin",av:profile?.avatar||(user.displayName||"A").slice(0,2).toUpperCase()}}));
@@ -1983,7 +2041,7 @@ function App(){
           setAuthed(true);
         }
       }else{
-        setAuthed(false);setOrgId(null);
+        setAuthed(false);setOrgId(null);setNeedsVerify(false);
       }
       setLoading(false);
     });
@@ -2031,6 +2089,15 @@ function App(){
       });
     }
   },[authed,orgId,store.curUser?.id]);
+
+  // Auto-update trial status to expired in database
+  useEffect(()=>{
+    const isSA=SUPER_ADMINS.includes(store.curUser?.email);
+    const isTrialExpired=!isSA&&store.sub?.status==="trial"&&store.sub.trialEnd&&new Date(store.sub.trialEnd)<new Date();
+    if(isTrialExpired&&orgId){
+      DB.updateSubscription(orgId,{status:"expired"}).catch(e=>console.error("Trial expire update error:",e));
+    }
+  },[store.sub?.status,store.sub?.trialEnd,orgId,store.curUser?.email]);
 
   // Fallback: set curUser in demo mode
   useEffect(()=>{if(authed&&!store.curUser&&!firebaseReady)setStore(p=>({...p,curUser:p.users[0]}))},[authed]);
@@ -2089,6 +2156,9 @@ function App(){
     </div>
   </div>;
 
+  // Email verification required
+  if(needsVerify)return <EmailVerifyScreen onVerified={()=>{setNeedsVerify(false);window.location.reload()}} onLogout={handleLogout}/>;
+
   if(!authed)return <Auth onLogin={()=>{if(!firebaseReady)setAuthed(true)}}/>;
   if(!store.curUser)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg}}>
     <div style={{textAlign:"center"}}>
@@ -2098,7 +2168,7 @@ function App(){
 
   // Trial expiration check
   const isSuperAdmin=SUPER_ADMINS.includes(store.curUser?.email);
-  const trialExpired=!isSuperAdmin&&store.sub?.status==="trial"&&store.sub.trialEnd&&new Date(store.sub.trialEnd)<new Date();
+  const trialExpired=!isSuperAdmin&&(store.sub?.status==="trial"||store.sub?.status==="expired")&&store.sub.trialEnd&&new Date(store.sub.trialEnd)<new Date();
   if(trialExpired&&page!=="billing"){
     return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,padding:20}}>
       <div style={{background:C.card,borderRadius:20,border:"1px solid "+C.border,padding:"40px 30px",maxWidth:460,textAlign:"center",boxShadow:"0 8px 30px rgba(0,0,0,.06)"}}>
