@@ -745,7 +745,7 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
         <div style={{fontSize:11,color:C.sub,marginTop:2}}>{isExpired?"Verleng uw abonnement om door te gaan":sub.expiresAt?"Geldig tot: "+new Date(sub.expiresAt).toLocaleDateString('nl-BE',{day:'numeric',month:'long',year:'numeric'})+(sub.billing==="year"?" (jaarabonnement)":" (maandabonnement)"):""}</div>
       </div>
     </div>}
-    <div style={{textAlign:"center",marginBottom:28}}><h1 style={{fontSize:26,fontWeight:800,margin:"0 0 6px"}}>Kies uw abonnement</h1><p style={{fontSize:13,color:C.sub}}>Starter en Professional 14 dagen gratis · Daarna betaald · 15% korting bij jaarabonnement</p>
+    <div style={{textAlign:"center",marginBottom:28}}><h1 style={{fontSize:26,fontWeight:800,margin:"0 0 6px"}}>Kies uw abonnement</h1><p style={{fontSize:13,color:C.sub}}>14 dagen gratis proefperiode · Daarna betaald · 15% korting bij jaarabonnement</p>
       {/* Billing toggle */}
       <div style={{display:"inline-flex",alignItems:"center",gap:10,marginTop:16,padding:"4px",background:"#f1f5f9",borderRadius:10}}>
         <button onClick={()=>setBilling("month")} style={{padding:"8px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:billing==="month"?C.accent:"transparent",color:billing==="month"?"#fff":C.sub,transition:"all .15s"}}>Maandelijks</button>
