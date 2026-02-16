@@ -391,7 +391,7 @@ const C={bg:"#f8fafc",card:"#ffffff",cardHover:"#f1f5f9",input:"#f8fafc",border:
 const PRIORITY={low:{l:"Laag",c:"#16a34a",b:"#f0fdf4"},medium:{l:"Middel",c:"#d97706",b:"#fffbeb"},high:{l:"Hoog",c:"#dc2626",b:"#fef2f2"},critical:{l:"Kritiek",c:"#991b1b",b:"#fee2e2"}};
 const STATUS={open:{l:"Open",c:"#2563eb",b:"#eff6ff",i:"○"},in_progress:{l:"In Behandeling",c:"#d97706",b:"#fffbeb",i:"◐"},resolved:{l:"Opgelost",c:"#16a34a",b:"#f0fdf4",i:"●"},closed:{l:"Gesloten",c:"#64748b",b:"#f1f5f9",i:"◆"}};
 const CATS=["Elektriciteit","Sanitair","Verwarming","Ventilatie","Deur/Raam","Vloer/Muur","Lift","Brandveiligheid","Schoonmaak","IT/Netwerk","Meubilair","Anders"];
-const PAGES=[{id:"dashboard",l:"Dashboard"},{id:"meldingen",l:"Meldingen"},{id:"new",l:"Nieuwe melding"},{id:"building",l:"Gebouwen"},{id:"floorplans",l:"Plattegronden"},{id:"users",l:"Gebruikers"},{id:"rapportage",l:"Rapportage"},{id:"groep",l:"Groepsdashboard"},{id:"locaties",l:"Locaties"},{id:"vergelijk",l:"Vergelijking"},{id:"billing",l:"Abonnement"},{id:"settings",l:"Instellingen"}];
+const PAGES=[{id:"dashboard",l:"Dashboard"},{id:"meldingen",l:"Meldingen"},{id:"new",l:"Nieuwe melding"},{id:"building",l:"Gebouwen"},{id:"floorplans",l:"Plattegronden"},{id:"users",l:"Gebruikers"},{id:"rapportage",l:"Overzicht & Rapporten"},{id:"groep",l:"Groepsdashboard"},{id:"locaties",l:"Locaties"},{id:"vergelijk",l:"Vergelijking"},{id:"billing",l:"Abonnement"},{id:"settings",l:"Instellingen"}];
 const DEFAULT_PERMS={
   admin:["dashboard","meldingen","new","building","floorplans","users","rapportage","groep","locaties","vergelijk","billing","settings"],
   technician:["dashboard","meldingen","new","building","floorplans","rapportage"],
@@ -502,7 +502,7 @@ const TrialBanner=({sub,onUp})=>{
   const clr=pl?.color||"#2563eb";
   return <div style={{background:"linear-gradient(135deg,"+clr+"08,"+clr+"12)",border:"1px solid "+clr+"40",borderRadius:12,padding:"12px 16px",margin:"0 0 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",animation:"fadeIn .4s"}}>
     <div style={{width:38,height:38,borderRadius:10,background:clr+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="time" size={20} color={clr}/></div>
-    <div style={{flex:1,minWidth:180}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{pl?.name||"Starter"} proefperiode — nog {dl} {dl===1?"dag":"dagen"}</div><div style={{fontSize:12,color:C.sub,marginTop:1}}>Probeer alle {pl?.name||"Starter"} functies gratis. Daarna kiest u een betaald abonnement.</div></div>
+    <div style={{flex:1,minWidth:180}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{pl?.name||"Starter"} proefperiode — nog {dl} {dl===1?"dag":"dagen"}</div><div style={{fontSize:12,color:C.sub,marginTop:1}}>Uw proefperiode is actief — alle functies zijn beschikbaar.</div></div>
     <Btn onClick={onUp} sm>Abonnement kiezen</Btn>
   </div>;
 };
@@ -796,7 +796,7 @@ const Sidebar=({active,onNav,user,onLogout,sub})=>{
       {items.map(it=><button key={it.id} onClick={()=>onNav(it.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:7,border:"none",cursor:"pointer",marginBottom:1,background:active===it.id?"rgba(255,255,255,.08)":"transparent",color:active===it.id?"#fff":C.sbDim,fontSize:13,fontWeight:active===it.id?600:400,textAlign:"left",transition:"all .1s"}}><Icon name={it.ic} size={16} color={active===it.id?"#60a5fa":C.sbDim}/>{it.l}</button>)}
     </nav>
     {pl&&!isSA&&<div style={{margin:"0 8px 6px",padding:"6px 10px",background:"rgba(255,255,255,.04)",borderRadius:6,border:"1px solid rgba(255,255,255,.06)",cursor:"pointer"}} onClick={()=>onNav("billing")}>
-      <div style={{display:"flex",alignItems:"center",gap:5}}><Icon name={sub.status==="trial"?"time":"crown"} size={12} color={pl.color}/><span style={{fontSize:10,fontWeight:600,color:pl.color}}>{pl.name}{sub.status==="trial"?" (Proef)":""}</span></div>
+      <div style={{display:"flex",alignItems:"center",gap:5}}><Icon name={sub.status==="trial"?"time":"crown"} size={12} color={pl.color}/><span style={{fontSize:10,fontWeight:600,color:pl.color}}>{pl.name}{sub.status==="trial"?" — proefperiode actief":""}</span></div>
       {sub.status==="active"&&sub.expiresAt&&(()=>{const dl=Math.ceil((new Date(sub.expiresAt)-new Date())/(864e5));return dl<=7?<div style={{fontSize:9,color:dl<=3?"#fca5a5":"#fde68a",marginTop:2}}>{dl<=0?"Verlopen!":"Verloopt over "+dl+" "+(dl===1?"dag":"dagen")}</div>:null})()}
     </div>}
     <div style={{padding:"8px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
@@ -1087,7 +1087,7 @@ const Rapportage=({mel,org,users,onNotify})=>{
   };
 
   return <div style={{padding:"20px 16px",maxWidth:880}}>
-    <h2 style={{fontSize:22,fontWeight:800,marginBottom:16}}>Rapportage</h2>
+    <h2 style={{fontSize:22,fontWeight:800,marginBottom:16}}>Overzicht & Rapporten</h2>
     <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.border,padding:20,marginBottom:16}}>
       <div style={{fontSize:13,fontWeight:700,marginBottom:12}}>Selecteer periode</div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
