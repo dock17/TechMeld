@@ -156,7 +156,7 @@ exports.inviteUser = onCall({region:"europe-west1",secrets:["EMAIL_PASS"]}, asyn
   await db.collection("users").doc(ur.uid).set({name,email,role:role||"reporter",orgId,avatar:name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),createdAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
   // Send invitation email with password setup link
   try{
-    const resetLink=await admin.auth().generatePasswordResetLink(email,{url:"https://techmeld.eu"});
+    const resetLink=await admin.auth().generatePasswordResetLink(email,{url:"https://techmeld.eu/app"});
     // Extract oobCode and build app link (prevents email scanner pre-fetch consuming the one-time code)
     const parsed=new URL(resetLink);
     const oobCode=parsed.searchParams.get("oobCode");

@@ -22,8 +22,12 @@
         "destination": "/robots.txt"
       },
       {
-        "source": "/landing.html",
-        "destination": "/landing.html"
+        "source": "/app",
+        "destination": "/app.html"
+      },
+      {
+        "source": "/app/**",
+        "destination": "/app.html"
       },
       {
         "source": "**",
