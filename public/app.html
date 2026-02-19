@@ -176,17 +176,72 @@ const DB = {
     }
     // Create organization doc
     const orgRef = db.collection('organizations').doc();
+    // Seed rooms based on organization type
+    const roomsByType = {
+      care: [
+        {id:"r1",name:"Kamer 101",fId:"f1",type:"bedroom"},
+        {id:"r2",name:"Kamer 102",fId:"f1",type:"bedroom"},
+        {id:"r3",name:"Gemeenschapsruimte",fId:"f2",type:"common"},
+        {id:"r4",name:"Badkamer",fId:"f2",type:"bathroom"},
+        {id:"r5",name:"Berging",fId:"f3",type:"storage"},
+        {id:"r6",name:"Technische Ruimte",fId:"f3",type:"technical"},
+      ],
+      hospital: [
+        {id:"r1",name:"Kamer 101",fId:"f1",type:"bedroom"},
+        {id:"r2",name:"Kamer 102",fId:"f1",type:"bedroom"},
+        {id:"r3",name:"Wachtzaal",fId:"f2",type:"common"},
+        {id:"r4",name:"Operatiezaal",fId:"f2",type:"medical"},
+        {id:"r5",name:"Berging",fId:"f3",type:"storage"},
+        {id:"r6",name:"Technische Ruimte",fId:"f3",type:"technical"},
+      ],
+      hotel: [
+        {id:"r1",name:"Kamer 101",fId:"f1",type:"bedroom"},
+        {id:"r2",name:"Kamer 102",fId:"f1",type:"bedroom"},
+        {id:"r3",name:"Lobby",fId:"f2",type:"common"},
+        {id:"r4",name:"Restaurant",fId:"f2",type:"dining"},
+        {id:"r5",name:"Berging",fId:"f3",type:"storage"},
+        {id:"r6",name:"Technische Ruimte",fId:"f3",type:"technical"},
+      ],
+    };
     const orgData = {
       name: orgName, type: orgType,
       ownerId: cred.user.uid,
+      buildings: [{id:"b1", name:"Hoofdgebouw"}],
       floors: [
-        {id:"f1",name:"Begane Grond",nr:0},
-        {id:"f2",name:"1e Verdieping",nr:1},
+        {id:"f1",name:"Begane Grond",nr:0,bId:"b1"},
+        {id:"f2",name:"1e Verdieping",nr:1,bId:"b1"},
+        {id:"f3",name:"2e Verdieping",nr:2,bId:"b1"},
       ],
-      rooms: [],
+      rooms: roomsByType[orgType] || roomsByType.care,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     await orgRef.set(orgData);
+    // Create seed meldingen
+    const meldingenRef = db.collection('organizations').doc(orgRef.id).collection('meldingen');
+    const now = new Date();
+    await Promise.all([
+      meldingenRef.add({
+        title:"Lekkende kraan — Kamer 101", desc:"Kraan in kamer 101 lekt continu.",
+        status:"open", prio:"medium", cat:"Sanitair",
+        room:"r1", floor:"f1", building:"b1",
+        by: cred.user.uid, to: null,
+        createdAt: firebase.firestore.Timestamp.fromDate(now),
+      }),
+      meldingenRef.add({
+        title:"Verlichting flikkert", desc:"Verlichting in de gang flikkert onregelmatig.",
+        status:"in_progress", prio:"high", cat:"Elektriciteit",
+        room:"r3", floor:"f2", building:"b1",
+        by: cred.user.uid, to: null,
+        createdAt: firebase.firestore.Timestamp.fromDate(new Date(now.getTime() - 86400000)),
+      }),
+      meldingenRef.add({
+        title:"Deur sluit niet goed", desc:"Deur van berging sluit niet goed meer.",
+        status:"resolved", prio:"low", cat:"Deur/Raam",
+        room:"r5", floor:"f3", building:"b1",
+        by: cred.user.uid, to: null,
+        createdAt: firebase.firestore.Timestamp.fromDate(new Date(now.getTime() - 172800000)),
+      }),
+    ]);
     // Create user profile doc
     await db.collection('users').doc(cred.user.uid).set({
       name, email, role:"admin", orgId: orgRef.id,
