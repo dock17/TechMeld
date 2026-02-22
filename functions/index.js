@@ -480,7 +480,7 @@ exports.activateSubscription = onCall({region:"europe-west1"}, async(req)=>{
 // ═══════════════════════════════════════════
 // SUPER ADMIN PROFILE (server-side only)
 // ═══════════════════════════════════════════
-const SUPER_ADMINS_SERVER = ["tigrealata@hotmail.com","info@techmeld.eu"];
+const SUPER_ADMINS_SERVER = ["info@techmeld.eu"];
 
 exports.createSuperAdminProfile = onCall({region:"europe-west1"}, async(req)=>{
   if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
