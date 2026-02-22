@@ -266,5 +266,13 @@ service cloud.firestore {
       allow delete: if isAuth()
         && resource.data.userId == request.auth.uid;
     }
+
+    // ════════════════════════════════════════════
+    // AUDIT LOG (Cloud Functions only, super admin read)
+    // ════════════════════════════════════════════
+    match /auditLog/{logId} {
+      allow read: if isAuth() && isSuperAdmin();
+      allow write: if false; // Only via Cloud Functions
+    }
   }
 }

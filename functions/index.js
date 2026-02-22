@@ -47,6 +47,15 @@ async function requireSuperAdmin(auth) {
   return userData;
 }
 
+async function auditLog(action, actorUid, details){
+  try{
+    await db.collection("auditLog").add({
+      action, actorUid, details:details||{},
+      timestamp:admin.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){console.error("Audit log error:",e)}
+}
+
 function esc(s) {
   if (!s) return "";
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
@@ -130,6 +139,15 @@ exports.onNewMelding = onDocumentCreated({document:"organizations/{orgId}/meldin
 exports.onMeldingUpdate = onDocumentUpdated({document:"organizations/{orgId}/meldingen/{meldingId}",region:"europe-west1",secrets:["EMAIL_PASS"]}, async(event)=>{
   const before=event.data.before.data(), after=event.data.after.data(), orgId=event.params.orgId;
   const sc=before.status!==after.status, ac=before.to!==after.to&&after.to, nc=(after.comments||[]).length>(before.comments||[]).length;
+  // Auto-set expireAt for completed meldingen (2 year retention)
+  if(sc&&after.status==="afgerond"&&!after.expireAt){
+    const expireAt=new Date(Date.now()+2*365*24*60*60*1000);
+    await event.data.after.ref.update({expireAt:admin.firestore.Timestamp.fromDate(expireAt)});
+  }
+  // Clear expireAt if reopened
+  if(sc&&before.status==="afgerond"&&after.status!=="afgerond"&&after.expireAt){
+    await event.data.after.ref.update({expireAt:admin.firestore.FieldValue.delete()});
+  }
   if(!sc&&!ac&&!nc)return;
   try{
     const users=await getUsers(orgId);
@@ -165,7 +183,13 @@ exports.checkTrialEligibility = onCall({region:"europe-west1",maxInstances:10}, 
   const emailKey=email.trim().toLowerCase().replace(/[.#$/\[\]]/g,'_');
   const doc=await db.collection("trialHistory").doc(emailKey).get();
   if(doc.exists){
-    throw new HttpsError("already-exists","Dit e-mailadres heeft al een proefperiode gehad.");
+    const data=doc.data();
+    // Allow if TTL expired but document not yet deleted
+    if(data.expireAt&&data.expireAt.toDate()<new Date()){
+      await doc.ref.delete();
+    }else{
+      throw new HttpsError("already-exists","Dit e-mailadres heeft al een proefperiode gehad.");
+    }
   }
   return{eligible:true};
 });
@@ -245,7 +269,9 @@ exports.updateUserRole = onCall({region:"europe-west1",maxInstances:10}, async(r
   const targetDoc = await db.collection("users").doc(userId).get();
   if(!targetDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
   await requireAdminOfOrg(req.auth, targetDoc.data().orgId);
+  const oldRole=targetDoc.data().role;
   await db.collection("users").doc(userId).update({role,perms:perms||[]});
+  await auditLog("updateUserRole",req.auth.uid,{targetUserId:userId,oldRole,newRole:role,orgId:targetDoc.data().orgId});
   return{success:true};
 });
 
@@ -259,10 +285,50 @@ exports.deleteUserAccount = onCall({region:"europe-west1",maxInstances:10}, asyn
   } else {
     await requireSuperAdmin(req.auth);
   }
+  const targetData=targetDoc.exists?targetDoc.data():{};
   try{await admin.auth().deleteUser(userId);}catch(e){}
   try{await db.collection("users").doc(userId).delete();}catch(e){}
   const t=await db.collection("fcmTokens").where("userId","==",userId).get();
   const b=db.batch();t.forEach(d=>b.delete(d.ref));await b.commit();
+  await auditLog("deleteUserAccount",req.auth.uid,{targetUserId:userId,targetEmail:targetData.email||"unknown",orgId:targetData.orgId||"unknown"});
+  return{success:true};
+});
+
+// ═══════════════════════════════════════════
+// GDPR RIGHT TO ERASURE (Art. 17)
+// ═══════════════════════════════════════════
+exports.eraseMyData = onCall({region:"europe-west1",maxInstances:5}, async(req)=>{
+  if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
+  requireRecentAuth(req.auth);
+  const uid=req.auth.uid;
+  const userDoc=await db.collection("users").doc(uid).get();
+  if(!userDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
+  const userData=userDoc.data();
+  const orgId=userData.orgId;
+  // Anonymize user references in meldingen (preserve melding data, remove PII)
+  if(orgId){
+    const melSnap=await db.collection("organizations").doc(orgId).collection("meldingen").get();
+    const batch=db.batch();
+    for(const doc of melSnap.docs){
+      const d=doc.data();
+      const updates={};
+      if(d.createdBy===uid)updates.createdByName="Verwijderde gebruiker";
+      if(d.assignedTo===uid){updates.assignedTo=null;updates.assignedToName="Verwijderde gebruiker";}
+      if(Object.keys(updates).length>0)batch.update(doc.ref,updates);
+    }
+    await batch.commit();
+  }
+  // Delete FCM tokens
+  const tokSnap=await db.collection("fcmTokens").where("userId","==",uid).get();
+  const b2=db.batch();tokSnap.forEach(d=>b2.delete(d.ref));await b2.commit();
+  // Delete trial history
+  const email=(userData.email||"").toLowerCase().replace(/[.#$/\[\]]/g,'_');
+  if(email){try{await db.collection("trialHistory").doc(email).delete();}catch(e){}}
+  // Delete user profile
+  await db.collection("users").doc(uid).delete();
+  // Delete Firebase Auth account
+  try{await admin.auth().deleteUser(uid);}catch(e){}
+  await auditLog("eraseMyData",uid,{email:userData.email||"unknown",orgId:orgId||"none"});
   return{success:true};
 });
 
@@ -518,6 +584,7 @@ exports.createSuperAdminProfile = onCall({region:"europe-west1",maxInstances:3},
     createdAt:admin.firestore.FieldValue.serverTimestamp(),
   });
   console.log(`✅ Super admin profile created: ${email}`);
+  await auditLog("createSuperAdminProfile",req.auth.uid,{email});
   return{success:true};
 });
 
@@ -525,6 +592,9 @@ exports.deleteOrganization = onCall({region:"europe-west1",maxInstances:3}, asyn
   const{orgId}=req.data;
   requireRecentAuth(req.auth);
   await requireSuperAdmin(req.auth);
+  // Capture org name before deletion for audit
+  const orgDoc=await db.collection("organizations").doc(orgId).get();
+  const orgName=orgDoc.exists?(orgDoc.data().name||orgId):orgId;
   // Delete all users in this org (Auth + Firestore)
   const usersSnap=await db.collection("users").where("orgId","==",orgId).get();
   for(const doc of usersSnap.docs){
@@ -545,6 +615,7 @@ exports.deleteOrganization = onCall({region:"europe-west1",maxInstances:3}, asyn
   const b4=db.batch();tokSnap.forEach(d=>b4.delete(d.ref));await b4.commit();
   // Delete organization document
   await db.collection("organizations").doc(orgId).delete();
+  await auditLog("deleteOrganization",req.auth.uid,{orgId,orgName,usersDeleted:usersSnap.size});
   return{success:true};
 });
 

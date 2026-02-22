@@ -310,7 +310,8 @@ const DB = {
       email: email.toLowerCase(),
       orgName: orgName,
       orgId: orgRef.id,
-      registeredAt: _serverTimestamp()
+      registeredAt: _serverTimestamp(),
+      expireAt: _fromDate(new Date(Date.now()+365*24*60*60*1000))
     });
     return cred.user;
   },
@@ -333,7 +334,7 @@ const DB = {
   async saveFCMToken(userId,orgId,token){
     if(!firebaseReady||!token)return;
     var id=userId+"_"+btoa(token).slice(0,8);
-    await db.collection('fcmTokens').doc(id).set({userId:userId,orgId:orgId,token:token,device:navigator.userAgent.slice(0,80),updatedAt:_serverTimestamp()},{merge:true});
+    await db.collection('fcmTokens').doc(id).set({userId:userId,orgId:orgId,token:token,device:/Mobi|Android/i.test(navigator.userAgent)?"mobile":"desktop",updatedAt:_serverTimestamp()},{merge:true});
   },
 
   async getOrgFCMTokens(orgId,excludeUserId){
@@ -2005,6 +2006,8 @@ const AdminPanel=({curUser,onImpersonate})=>{
 const Settings=({org,onUpd,onNotify,onNav})=>{
   const[form,setForm]=useState({name:org.name,type:org.type,btwNummer:org.btwNummer||"",address:org.address||"",postcode:org.postcode||"",city:org.city||""});
   const[notif,setNotif]=useState({push:true,email:true});
+  const[eraseConfirm,setEraseConfirm]=useState(false);
+  const[reauthAction,setReauthAction]=useState(null);
   const Tog=({value,onChange,label})=><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid "+C.border}}><span style={{fontSize:13}}>{label}</span><button onClick={()=>onChange(!value)} style={{width:40,height:22,borderRadius:11,border:"none",cursor:"pointer",padding:2,background:value?C.accent:"#cbd5e1",display:"flex",alignItems:"center",justifyContent:value?"flex-end":"flex-start",transition:"all .2s"}}><div style={{width:18,height:18,borderRadius:9,background:"white",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}/></button></div>;
   return <div style={{padding:"20px 16px",maxWidth:600}}>
     <h1 style={{fontSize:24,fontWeight:800,margin:"0 0 16px"}}>Instellingen</h1>
@@ -2032,9 +2035,15 @@ const Settings=({org,onUpd,onNotify,onNav})=>{
     </div>
     <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16}}>
       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><Icon name="shield" size={18} color={C.accent}/><h3 style={{fontSize:14,fontWeight:700,margin:0}}>Beveiliging & Juridisch</h3></div>
-      {["🔐 AES-256 encryptie","🛡️ AVG/GDPR conform","🔒 Data geïsoleerd per organisatie","⚖️ Belgisch Auteursrecht beschermd","🇪🇺 EU-richtlijn 2009/24/EG"].map((t,i)=><div key={i} style={{fontSize:12,color:C.sub,padding:"6px 0",borderBottom:i<4?"1px solid "+C.border:"none"}}>{t}</div>)}
+      {["🔐 AES-256 encryptie","🛡️ AVG/GDPR conform","🔒 Data geïsoleerd per organisatie","⚖️ Belgisch Auteursrecht beschermd","🇪🇺 EU-richtlijn 2009/24/EG"].map((t,i)=><div key={i} style={{fontSize:12,color:C.sub,padding:"6px 0",borderBottom:"1px solid "+C.border}}>{t}</div>)}
+      <div style={{padding:"10px 0",borderBottom:"1px solid "+C.border}}>
+        {!eraseConfirm?<button onClick={()=>setEraseConfirm(true)} style={{fontSize:12,color:"#dc2626",background:"none",border:"none",cursor:"pointer",padding:0,fontWeight:600}}>🗑️ Mijn gegevens verwijderen (AVG Art. 17)</button>
+        :<div><div style={{fontSize:11,color:"#dc2626",marginBottom:8,lineHeight:1.5}}>Dit verwijdert uw account, profiel, tokens en anonimiseert uw meldingen. Dit kan niet ongedaan worden.</div>
+        <div style={{display:"flex",gap:8}}><button onClick={()=>setReauthAction({title:"Gegevens verwijderen",message:"Bevestig uw wachtwoord om al uw gegevens te verwijderen.",onConfirm:async()=>{await _call("eraseMyData",{});onNotify({title:"Gegevens verwijderd",msg:"Uw account en gegevens zijn verwijderd.",type:"success"});setTimeout(()=>window.location.reload(),1500)}})} style={{fontSize:11,background:"#dc2626",color:"#fff",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontWeight:600}}>Definitief verwijderen</button><button onClick={()=>setEraseConfirm(false)} style={{fontSize:11,background:C.card,color:C.text,border:"1px solid "+C.border,borderRadius:6,padding:"6px 12px",cursor:"pointer"}}>Annuleren</button></div></div>}
+      </div>
       <div style={{marginTop:10,fontSize:10,color:C.dim,lineHeight:1.5}}>© {new Date().getFullYear()} TechMeld™ — Bijberoep · Genk, België<br/>Ondernemingsnummer: BE0XXX.XXX.XXX</div>
     </div>
+    <ReauthModal show={!!reauthAction} title={reauthAction?.title||""} message={reauthAction?.message||""} onConfirm={async()=>{if(reauthAction?.onConfirm)await reauthAction.onConfirm();setReauthAction(null)}} onCancel={()=>setReauthAction(null)}/>
   </div>;
 };
 
