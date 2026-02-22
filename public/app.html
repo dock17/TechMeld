@@ -6,7 +6,7 @@
   <script>
   // Force service worker update and cache clear on version change
   (function(){
-    var APP_VERSION="20260222e";
+    var APP_VERSION="20260222f";
     var stored=sessionStorage.getItem("tm_v");
     if(stored!==APP_VERSION){
       sessionStorage.setItem("tm_v",APP_VERSION);
@@ -170,7 +170,7 @@ const ReauthModal=({show,title,message,onConfirm,onCancel})=>{
   </div>;
 };
 
-const Toast=({items,onDismiss})=>items.length?<div style={{position:"fixed",top:12,right:12,zIndex:9999,display:"flex",flexDirection:"column",gap:6,maxWidth:340}}>
+const Toast=({items,onDismiss})=>items.length?<div role="status" aria-live="polite" style={{position:"fixed",top:12,right:12,zIndex:9999,display:"flex",flexDirection:"column",gap:6,maxWidth:340}}>
   {items.map(n=><div key={n.id} style={{background:n.type==="success"?"#f0fdf4":n.type==="error"?"#fef2f2":"#eff6ff",border:"1px solid "+(n.type==="success"?"#bbf7d0":n.type==="error"?"#fecaca":"#bfdbfe"),borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,animation:"slideIn .3s",boxShadow:"0 4px 16px rgba(0,0,0,.06)"}}>
     <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:C.text}}>{n.title}</div>{n.msg&&<div style={{fontSize:11,color:C.sub,marginTop:1}}>{n.msg}</div>}</div>
     <button onClick={()=>onDismiss(n.id)} style={{background:"none",border:"none",color:C.dim,cursor:"pointer",padding:2}}><Icon name="close" size={14}/></button>
@@ -539,7 +539,7 @@ const Sidebar=({active,onNav,user,onLogout,sub,impersonating})=>{
   const allOrgItems=[{id:"dashboard",ic:"dashboard",l:"Dashboard"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuwe Melding"},{id:"building",ic:"building",l:"Gebouwen"},{id:"floorplans",ic:"floor",l:"Plattegronden"},{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]);
   const items=isSA?(impersonating?allOrgItems.concat([{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]):[{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]):allOrgItems.filter(function(it){return userPerms.includes(it.id)});
   const pl=PLANS.find(p=>p.id===sub?.plan);
-  return <div className="desktop-sidebar" style={{width:230,height:"100%",background:C.sbBg,display:"flex",flexDirection:"column",flexShrink:0,overflow:"auto"}}>
+  return <nav className="desktop-sidebar" role="navigation" aria-label="Hoofdnavigatie" style={{width:230,height:"100%",background:C.sbBg,display:"flex",flexDirection:"column",flexShrink:0,overflow:"auto"}}>
     <div style={{padding:"16px 14px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid rgba(255,255,255,.06)"}}>
       <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#2563eb,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="shield" size={16} color="white"/></div>
       <div style={{fontSize:16,fontWeight:700,color:C.sbText}}>TechMeld<sup style={{fontSize:7,color:"#60a5fa"}}>™</sup></div>
@@ -559,7 +559,7 @@ const Sidebar=({active,onNav,user,onLogout,sub,impersonating})=>{
       <button onClick={onLogout} style={{width:"100%",display:"flex",alignItems:"center",gap:5,padding:"5px 8px",borderRadius:5,border:"none",cursor:"pointer",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:11}}><Icon name="logout" size={13} color="#f87171"/> Uitloggen</button>
       <div style={{marginTop:6,textAlign:"center",fontSize:7,color:"rgba(255,255,255,.15)"}}>© {new Date().getFullYear()} TechMeld™</div>
     </div>
-  </div>;
+  </nav>;
 };
 
 const MobileNav=({active,onNav,user,onLogout,sub,impersonating})=>{
@@ -570,10 +570,10 @@ const MobileNav=({active,onNav,user,onLogout,sub,impersonating})=>{
   const isGroep=sub?.plan==="groep";
   const items=(isSA&&impersonating)?[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}]:[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}].filter(function(it){return it.id==="menu"||userPerms.includes(it.id)});
   var menuItems=(isSA&&impersonating)?[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"},{id:"admin",ic:"shield",l:"⚡ Admin"}]):[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(isSA?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
-  return <><div className="mobile-nav">{items.map(it=><button key={it.id} onClick={function(){if(it.id==="menu")setShowMenu(!showMenu);else{setShowMenu(false);onNav(it.id)}}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"5px 2px",border:"none",cursor:"pointer",borderRadius:6,background:"transparent",color:(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}}>
+  return <><nav className="mobile-nav" role="navigation" aria-label="Mobiele navigatie">{items.map(it=><button key={it.id} aria-label={it.l} onClick={function(){if(it.id==="menu")setShowMenu(!showMenu);else{setShowMenu(false);onNav(it.id)}}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"5px 2px",border:"none",cursor:"pointer",borderRadius:6,background:"transparent",color:(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}}>
     {it.id==="new"?<div style={{width:38,height:38,borderRadius:19,marginTop:-16,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(37,99,235,.3)"}}><Icon name="plus" size={22} color="white"/></div>:<Icon name={it.ic} size={18} color={(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}/>}
     <span style={{fontSize:9,fontWeight:(active===it.id||(it.id==="menu"&&showMenu))?600:400}}>{it.l}</span>
-  </button>)}</div>
+  </button>)}</nav>
   {showMenu&&<div style={{position:"fixed",bottom:60,left:0,right:0,zIndex:998,padding:"8px 12px",paddingBottom:"calc(8px + env(safe-area-inset-bottom))"}}>
     <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.border,boxShadow:"0 -4px 20px rgba(0,0,0,.1)",overflow:"hidden"}}>
       <div style={{padding:"12px 14px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8}}>
@@ -2221,6 +2221,7 @@ function App(){
   };
 
   return <div className="app-shell" style={{display:"flex",height:"100vh",background:C.bg,overflow:"hidden"}}>
+    <a href="#main-content" className="skip-link">Ga naar inhoud</a>
     <Toast items={toasts} onDismiss={id=>setToasts(p=>p.filter(n=>n.id!==id))}/>
     {appLegalDoc&&<LegalModal doc={appLegalDoc} onClose={function(){setAppLegalDoc(null)}}/>}
     {showInstall&&!sessionStorage.getItem('tm_pwa_dismissed')&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",borderRadius:16,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 32px rgba(37,99,235,.35)",maxWidth:360,width:"calc(100% - 32px)",animation:"slideUp .3s ease"}}>
@@ -2241,7 +2242,7 @@ function App(){
       <div style={{marginTop:8,textAlign:"center"}}><svg width="20" height="10" viewBox="0 0 20 10" fill="#fff"><polygon points="10,10 0,0 20,0"/></svg></div>
     </div>}
     <Sidebar active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} impersonating={impersonating}/>
-    <main ref={mainRef} className="main-content" style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column",position:"relative"}}>
+    <main ref={mainRef} id="main-content" className="main-content" style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column",position:"relative"}}>
       <PullToRefresh containerRef={mainRef}>
       {impersonating&&<div style={{background:"linear-gradient(90deg,#dc2626,#b91c1c)",color:"#fff",padding:"6px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:6}}><Icon name="users" size={14} color="#fff"/><span style={{fontSize:12,fontWeight:600}}>Je bekijkt: {impersonating.orgName}</span></div>
