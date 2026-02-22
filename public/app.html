@@ -3,6 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <script>
+  // Force service worker update and cache clear on version change
+  (function(){
+    var APP_VERSION="20260222b";
+    var stored=localStorage.getItem("tm_v");
+    if(stored!==APP_VERSION){
+      localStorage.setItem("tm_v",APP_VERSION);
+      if(navigator.serviceWorker){
+        navigator.serviceWorker.getRegistrations().then(function(regs){
+          regs.forEach(function(r){r.unregister()});
+        });
+        caches.keys().then(function(keys){
+          keys.forEach(function(k){caches.delete(k)});
+        });
+        if(stored){location.reload(true);return}
+      }
+    }
+  })();
+  </script>
   <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
