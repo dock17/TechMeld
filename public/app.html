@@ -6,7 +6,7 @@
   <script>
   // Force service worker update and cache clear on version change
   (function(){
-    var APP_VERSION="20260222d";
+    var APP_VERSION="20260222e";
     var stored=localStorage.getItem("tm_v");
     if(stored!==APP_VERSION){
       localStorage.setItem("tm_v",APP_VERSION);
@@ -1482,6 +1482,8 @@ const Building=({org,onUpd,onNotify,sub,role})=>{
   const canEdit=role==="admin"||role==="superadmin";
   const buildings=org.buildings||[{id:"b_default",name:"Gebouw"}];
   const[selB,setSelB]=useState(buildings[0]?.id||"");
+  // Sync selB when buildings load/change
+  useEffect(()=>{if(buildings.length&&(!selB||!buildings.find(b=>b.id===selB))){setSelB(buildings[0].id)}},[buildings.length]);
   const[nf,setNf]=useState({name:"",nr:0});const[nr,setNr]=useState({name:"",fId:"",t:"patient"});const[sf,setSf]=useState(false);const[sr,setSr]=useState(false);const[bulkMode,setBulkMode]=useState(false);const[bulk,setBulk]=useState({from:"",to:"",prefix:"Kamer ",fId:"",t:"patient"});
   const[sb,setSb]=useState(false);const[nb,setNb]=useState("");const[editB,setEditB]=useState(null);const[editBName,setEditBName]=useState("");
   const rt={patient:"Patiëntkamer",common:"Gemeensch.",storage:"Berging",technical:"Technisch",special:"Speciaal",office:"Kantoor"};
@@ -1499,7 +1501,7 @@ const Building=({org,onUpd,onNotify,sub,role})=>{
     {/* Building tabs */}
     <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
       {buildings.map(b=><div key={b.id} style={{display:"flex",alignItems:"center",gap:0}}>
-        <button onClick={()=>setSelB(b.id)} style={{padding:"7px 14px",borderRadius:editB===b.id?"8px 0 0 8px":"8px",border:"1px solid "+(selB===b.id?C.accent:C.border),borderRight:editB===b.id?"none":undefined,background:selB===b.id?C.accentBg:C.card,color:selB===b.id?C.accent:C.sub,fontSize:13,fontWeight:selB===b.id?700:500,cursor:"pointer",transition:"all .15s"}}><Icon name="building" size={13} color={selB===b.id?C.accent:C.dim}/> {b.name}</button>
+        <button onClick={()=>setSelB(b.id)} style={{padding:"7px 14px",borderRadius:editB===b.id?"8px 0 0 8px":"8px",border:"1px solid "+(selB===b.id?C.accent:C.border),borderRight:editB===b.id?"none":undefined,background:selB===b.id?C.accentBg:C.card,color:selB===b.id?C.accent:C.sub,fontSize:13,fontWeight:selB===b.id?700:500,cursor:"pointer",transition:"all .15s",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><Icon name="building" size={13} color={selB===b.id?C.accent:C.dim}/> {b.name}</button>
         {canEdit&&selB===b.id&&editB!==b.id&&<button onClick={()=>{setEditB(b.id);setEditBName(b.name)}} style={{padding:"7px 6px",border:"1px solid "+C.accent,borderLeft:"none",borderRadius:"0 8px 8px 0",background:C.accentBg,cursor:"pointer",display:"flex",alignItems:"center"}}><Icon name="edit" size={11} color={C.accent}/></button>}
       </div>)}
     </div>
@@ -1870,7 +1872,7 @@ const Settings=({org,onUpd,onNotify,onNav})=>{
       <h3 style={{fontSize:14,fontWeight:700,margin:"0 0 12px"}}>Organisatie</h3>
       <Inp label="Naam" value={form.name} onChange={v=>setForm({...form,name:v})}/>
       <div style={{marginTop:10}}><Sel label="Type" value={form.type} onChange={v=>setForm({...form,type:v})} options={[{v:"hospital",l:"Ziekenhuis"},{v:"care",l:"Zorginstelling"},{v:"hotel",l:"Hotel"}]}/></div>
-      <div style={{marginTop:12}}><Btn onClick={()=>{onUpd({...org,...form});onNotify({title:"Opgeslagen",type:"success"})}} sm>Opslaan</Btn></div>
+      <div style={{marginTop:12}}><Btn onClick={()=>{var updated={...org,...form};if(updated.buildings&&updated.buildings.length===1){updated.buildings=[{...updated.buildings[0],name:form.name}]}onUpd(updated);onNotify({title:"Opgeslagen",type:"success"})}} sm>Opslaan</Btn></div>
     </div>
     <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:14}}>
       <h3 style={{fontSize:14,fontWeight:700,margin:"0 0 10px"}}>Notificaties</h3>
@@ -2440,7 +2442,7 @@ function App(){
       case"locaties":return <LocatieBeheer org={store.org} orgId={orgId} onNotify={notify}/>;
       case"vergelijk":return <VergelijkendeRapportage org={store.org} orgId={orgId} onNotify={notify}/>;
       case"users":return <Users users={store.users} cur={store.curUser} orgId={orgId} sub={store.sub} onUpd={u=>setStore(p=>({...p,users:u}))} onNotify={notify}/>;
-      case"settings":return <Settings org={store.org} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{name:o.name,type:o.type}).catch(e=>console.error(e))}} onNotify={notify} onNav={nav}/>;
+      case"settings":return <Settings org={store.org} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{name:o.name,type:o.type,buildings:o.buildings||[]}).catch(e=>console.error(e))}} onNotify={notify} onNav={nav}/>;
       case"admin":return SUPER_ADMINS.includes(store.curUser?.email)?<AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
       default:return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
     }
