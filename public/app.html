@@ -7,9 +7,9 @@
   // Force service worker update and cache clear on version change
   (function(){
     var APP_VERSION="20260222e";
-    var stored=localStorage.getItem("tm_v");
+    var stored=sessionStorage.getItem("tm_v");
     if(stored!==APP_VERSION){
-      localStorage.setItem("tm_v",APP_VERSION);
+      sessionStorage.setItem("tm_v",APP_VERSION);
       if(navigator.serviceWorker){
         navigator.serviceWorker.getRegistrations().then(function(regs){
           regs.forEach(function(r){r.unregister()});
@@ -196,6 +196,7 @@ const sanitize=(obj)=>{
   const out={};for(const k of Object.keys(obj))out[k]=sanitize(obj[k]);return out;
 };
 const escHtml=(s)=>s?String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"):"";
+const safeUrl=(url)=>{if(!url||typeof url!=="string")return"";try{const u=new URL(url);return["https:","http:","data:"].includes(u.protocol)?url:""}catch(e){return""}};
 const _FieldValue = firebase.firestore.FieldValue;
 const _Timestamp = firebase.firestore.Timestamp;
 const _serverTimestamp = () => _FieldValue.serverTimestamp();
@@ -1098,7 +1099,7 @@ const Detail=({mel,org,users,cur,onBack,onUpdate,onNotify})=>{
     onUpdate(update);onNotify({title:labels[s]||"Status gewijzigd",type:"success"});
   };
   return <>{lightbox&&<div onClick={function(){setLightbox(null)}} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20,cursor:"zoom-out"}}>
-    <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"90vh",borderRadius:8,objectFit:"contain",boxShadow:"0 8px 40px rgba(0,0,0,.5)"}}/>
+    <img src={safeUrl(lightbox)} style={{maxWidth:"95vw",maxHeight:"90vh",borderRadius:8,objectFit:"contain",boxShadow:"0 8px 40px rgba(0,0,0,.5)"}}/>
     <button onClick={function(e){e.stopPropagation();setLightbox(null)}} style={{position:"absolute",top:16,right:16,width:40,height:40,borderRadius:20,background:"rgba(255,255,255,.2)",border:"none",cursor:"pointer",fontSize:20,color:"white"}}>✕</button>
   </div>}
   <div style={{padding:"20px 16px",maxWidth:780}}>
@@ -1134,7 +1135,7 @@ const Detail=({mel,org,users,cur,onBack,onUpdate,onNotify})=>{
       </div>}
       <div style={{padding:14,borderBottom:"1px solid "+C.border}}><p style={{fontSize:13,lineHeight:1.7}}>{mel.desc}</p>
         {mel.photos&&mel.photos.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
-          {mel.photos.map(function(p,i){return <div key={p.id||i} style={{width:80,height:80,borderRadius:8,overflow:"hidden",border:"1px solid "+C.border,cursor:"pointer"}} onClick={function(){setLightbox(p.url)}}><img src={p.url} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>})}
+          {mel.photos.map(function(p,i){var u=safeUrl(p.url);return u?<div key={p.id||i} style={{width:80,height:80,borderRadius:8,overflow:"hidden",border:"1px solid "+C.border,cursor:"pointer"}} onClick={function(){setLightbox(u)}}><img src={u} style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>:null})}
         </div>}
       </div>
       <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.border,display:"flex",gap:16,flexWrap:"wrap"}}>
@@ -1201,7 +1202,7 @@ const NewMeld=({org,users,cur,onSubmit,onNav,onNotify,sub})=>{
         <input ref={fileRef} type="file" accept="image/*" multiple={maxPhotos>1} onChange={addPhotos} style={{display:"none"}}/>
         {photos.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
           {photos.map(p=><div key={p.id} style={{position:"relative",width:72,height:72,borderRadius:8,overflow:"hidden",border:"1px solid "+C.border}}>
-            <img src={p.url} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+            <img src={safeUrl(p.url)} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
             <button onClick={()=>rmPhoto(p.id)} style={{position:"absolute",top:2,right:2,width:20,height:20,borderRadius:10,background:"rgba(0,0,0,.6)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="close" size={10} color="white"/></button>
           </div>)}
         </div>}
@@ -1711,8 +1712,8 @@ const FloorPlans=({org,onNotify,orgId})=>{
           <div style={{display:"flex",gap:6}}><Btn onClick={()=>fileRef.current?.click()} v="secondary" sm>Vervangen</Btn><Btn onClick={handleDelete} v="danger" sm><Icon name="delete" size={13}/></Btn></div>
         </div>
         {curPlan.type==="application/pdf"?
-          <div style={{padding:20,textAlign:"center"}}><a href={curPlan.url} target="_blank" rel="noopener" style={{color:C.accent,fontWeight:600,fontSize:14}}>📄 PDF openen in nieuw tabblad</a></div>
-        : <div style={{padding:8,textAlign:"center",maxHeight:500,overflow:"auto"}}><img src={curPlan.url} style={{maxWidth:"100%",borderRadius:8}} alt="Plattegrond"/></div>
+          <div style={{padding:20,textAlign:"center"}}><a href={safeUrl(curPlan.url)} target="_blank" rel="noopener" style={{color:C.accent,fontWeight:600,fontSize:14}}>📄 PDF openen in nieuw tabblad</a></div>
+        : <div style={{padding:8,textAlign:"center",maxHeight:500,overflow:"auto"}}><img src={safeUrl(curPlan.url)} style={{maxWidth:"100%",borderRadius:8}} alt="Plattegrond"/></div>
         }
       </div>
     : <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:28,textAlign:"center",minHeight:240,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>

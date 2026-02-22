@@ -159,7 +159,7 @@ exports.onMeldingUpdate = onDocumentUpdated({document:"organizations/{orgId}/mel
 const RECAPTCHA_SITE_KEY="6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0";
 // RECAPTCHA_API_KEY moved to Firebase secrets — access via process.env.RECAPTCHA_API_KEY
 
-exports.checkTrialEligibility = onCall({region:"europe-west1"}, async(req)=>{
+exports.checkTrialEligibility = onCall({region:"europe-west1",maxInstances:10}, async(req)=>{
   const{email}=req.data;
   if(!email||typeof email!=="string")throw new HttpsError("invalid-argument","E-mail is vereist");
   const emailKey=email.trim().toLowerCase().replace(/[.#$/\[\]]/g,'_');
@@ -170,7 +170,7 @@ exports.checkTrialEligibility = onCall({region:"europe-west1"}, async(req)=>{
   return{eligible:true};
 });
 
-exports.verifyRecaptcha = onCall({region:"europe-west1",secrets:["RECAPTCHA_API_KEY"]}, async(req)=>{
+exports.verifyRecaptcha = onCall({region:"europe-west1",secrets:["RECAPTCHA_API_KEY"],maxInstances:10}, async(req)=>{
   const{token,action}=req.data;
   if(!token)throw new HttpsError("invalid-argument","Token mancante");
   try{
@@ -235,7 +235,7 @@ exports.inviteUser = onCall({region:"europe-west1",secrets:["EMAIL_PASS"],maxIns
 
 const ROLE_LABELS={admin:"Beheerder",technician:"Technicus",reporter:"Melder"};
 
-exports.updateUserRole = onCall({region:"europe-west1"}, async(req)=>{
+exports.updateUserRole = onCall({region:"europe-west1",maxInstances:10}, async(req)=>{
   const{userId,role,perms}=req.data;
   if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
   requireRecentAuth(req.auth);
@@ -395,7 +395,7 @@ exports.capturePayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIE
   // Verify captured amount matches expected
   const capture=capData.purchase_units[0].payments.captures[0];
   const capturedAmount=capture.amount.value;
-  if(capturedAmount!==orderData.expectedAmount){
+  if(parseFloat(capturedAmount)!==parseFloat(orderData.expectedAmount)){
     console.error(`Amount mismatch: captured ${capturedAmount} vs expected ${orderData.expectedAmount}`);
     await db.collection("paypalOrders").doc(orderId).update({status:"AMOUNT_MISMATCH",capturedAmount});
     throw new HttpsError("failed-precondition","Betaald bedrag komt niet overeen met verwacht bedrag");
@@ -500,7 +500,7 @@ exports.activateSubscription = onCall({region:"europe-west1",maxInstances:5}, as
 // SUPER ADMIN PROFILE (server-side only)
 // ═══════════════════════════════════════════
 
-exports.createSuperAdminProfile = onCall({region:"europe-west1"}, async(req)=>{
+exports.createSuperAdminProfile = onCall({region:"europe-west1",maxInstances:3}, async(req)=>{
   if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
   const email=req.auth.token.email;
   if(!email) throw new HttpsError("permission-denied","Niet geautoriseerd als super admin");
