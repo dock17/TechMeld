@@ -14,7 +14,7 @@ function getTransporter() {
     port: 587,
     secure: false,
     auth: { user: EMAIL_USER, pass: process.env.EMAIL_PASS },
-    tls: { rejectUnauthorized: false },
+    tls: { minVersion: "TLSv1.2" },
   });
 }
 const FROM = `TechMeld <${EMAIL_USER}>`;
@@ -152,8 +152,8 @@ const RECAPTCHA_SITE_KEY="6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0";
 
 exports.checkTrialEligibility = onCall({region:"europe-west1"}, async(req)=>{
   const{email}=req.data;
-  if(!email)throw new HttpsError("invalid-argument","E-mail is vereist");
-  const emailKey=email.toLowerCase().replace(/[.#$/\[\]]/g,'_');
+  if(!email||typeof email!=="string")throw new HttpsError("invalid-argument","E-mail is vereist");
+  const emailKey=email.trim().toLowerCase().replace(/[.#$/\[\]]/g,'_');
   const doc=await db.collection("trialHistory").doc(emailKey).get();
   if(doc.exists){
     throw new HttpsError("already-exists","Dit e-mailadres heeft al een proefperiode gehad.");
@@ -194,8 +194,11 @@ exports.verifyRecaptcha = onCall({region:"europe-west1",secrets:["RECAPTCHA_API_
   }
 });
 
-exports.inviteUser = onCall({region:"europe-west1",secrets:["EMAIL_PASS"]}, async(req)=>{
+exports.inviteUser = onCall({region:"europe-west1",secrets:["EMAIL_PASS"],maxInstances:10}, async(req)=>{
   const{name,email,role,orgId}=req.data;
+  if(!name||!email||!orgId)throw new HttpsError("invalid-argument","name, email en orgId zijn vereist");
+  const allowedRoles=["admin","technician","reporter"];
+  if(role&&!allowedRoles.includes(role))throw new HttpsError("invalid-argument","Ongeldig rol");
   await requireAdminOfOrg(req.auth, orgId);
   let ur;
   try{ur=await admin.auth().createUser({email,displayName:name});}
@@ -236,7 +239,7 @@ exports.updateUserRole = onCall({region:"europe-west1"}, async(req)=>{
   return{success:true};
 });
 
-exports.deleteUserAccount = onCall({region:"europe-west1"}, async(req)=>{
+exports.deleteUserAccount = onCall({region:"europe-west1",maxInstances:10}, async(req)=>{
   const{userId}=req.data;
   if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
   const targetDoc = await db.collection("users").doc(userId).get();
@@ -444,7 +447,7 @@ exports.capturePayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIE
   return{success:true,plan:orderData.planId,status:"active",billing:orderData.billing,expiresAt:expiresAt.toISOString(),activatedAt:now.toISOString()};
 });
 
-exports.activateSubscription = onCall({region:"europe-west1"}, async(req)=>{
+exports.activateSubscription = onCall({region:"europe-west1",maxInstances:5}, async(req)=>{
   if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
   await requireSuperAdmin(req.auth);
   const{planId,method,billing}=req.data;
@@ -459,12 +462,17 @@ exports.activateSubscription = onCall({region:"europe-west1"}, async(req)=>{
   const now=new Date();
   const expiresAt=new Date(now);
   if(billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
-  // Update subscription
-  await db.collection("subscriptions").doc(orgId).update({
-    plan:planId, status:"active", billing,
-    expiresAt:admin.firestore.Timestamp.fromDate(expiresAt),
-    activatedAt:admin.firestore.Timestamp.fromDate(now),
-    method, updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+  // Update subscription atomically
+  const subRef=db.collection("subscriptions").doc(orgId);
+  await db.runTransaction(async(t)=>{
+    const subDoc=await t.get(subRef);
+    if(!subDoc.exists) throw new HttpsError("not-found","Abonnement niet gevonden");
+    t.update(subRef,{
+      plan:planId, status:"active", billing,
+      expiresAt:admin.firestore.Timestamp.fromDate(expiresAt),
+      activatedAt:admin.firestore.Timestamp.fromDate(now),
+      method, updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+    });
   });
   // Create invoice
   const price=billing==="year"?planInfo.yearPrice:planInfo.price;
@@ -499,7 +507,7 @@ exports.createSuperAdminProfile = onCall({region:"europe-west1"}, async(req)=>{
   return{success:true};
 });
 
-exports.deleteOrganization = onCall({region:"europe-west1"}, async(req)=>{
+exports.deleteOrganization = onCall({region:"europe-west1",maxInstances:3}, async(req)=>{
   const{orgId}=req.data;
   await requireSuperAdmin(req.auth);
   // Delete all users in this org (Auth + Firestore)

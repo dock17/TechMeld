@@ -45,12 +45,12 @@
   <!-- reCAPTCHA Enterprise -->
   <script src="https://www.google.com/recaptcha/enterprise.js?render=6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0"></script>
   <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-functions-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js" integrity="sha384-4gq9w/AGf72FXdNQ3Kn3EqWP7633NbCMjpYHt8YCZyXf23o2opcuAr4cif41tLrC" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js" integrity="sha384-xtdq4MQqPj1dB5DQsuw9O7dh4kHhMP/Wp5u8O1jiaWiou13ZfJIgiccjtVK2pBhL" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js" integrity="sha384-Qgqc/HETq5lqJnRDqWnV1AZGw3pgMYNUVaqLLN1W/55XuWK94epwbCQrOvdoh1Zo" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js" integrity="sha384-yTXgVdKIoM5XuQZ1AGw9zFUgmu45OeHYpGDbbWtXHu/qOJxneVAXbw5Rh5CGninE" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js" integrity="sha384-F8rlC59erkC9PkWp7FIVgQHXhGqSCrhQS1i1zIWYJORAsFGQZE+do+ct+jlO2+0z" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-functions-compat.js" integrity="sha384-VZ3ffKEdaGenwt9PHb3mi4tIYhUneHNLCvFU20aZ92xtmgjTm+SFpHHrvVmrr4c9" crossorigin="anonymous"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body,#root{height:100%;width:100%;margin:0}
@@ -971,7 +971,7 @@ const MobileNav=({active,onNav,user,onLogout,sub})=>{
 // ═══════════════════════════════════════════
 // PAGES
 // ═══════════════════════════════════════════
-const Dashboard=({mel,org,onNav,sub,onUp})=>{
+const Dashboard=({mel,org,onNav,sub,onUp,curUser,orgId})=>{
   const s={tot:mel.length,open:mel.filter(m=>m.status==="open").length,prog:mel.filter(m=>m.status==="in_progress").length,done:mel.filter(m=>m.status==="resolved").length,crit:mel.filter(m=>m.prio==="critical"&&m.status!=="resolved"&&m.status!=="closed").length};
   const rec=[...mel].sort((a,b)=>new Date(b.at)-new Date(a.at)).slice(0,5);
   return <div style={{padding:"20px 16px",maxWidth:1100}}>
@@ -1004,7 +1004,7 @@ const Dashboard=({mel,org,onNav,sub,onUp})=>{
     :PushNotify.supported?
       <div style={{marginTop:12,padding:"10px 14px",background:"#fffbeb",borderRadius:8,border:"1px solid #fde68a",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
         <Icon name="notify" size={16} color="#d97706"/><span style={{fontSize:12,color:"#92400e",flex:1}}>Push notificaties zijn niet actief.</span>
-        <button onClick={function(){PushNotify.registerAndSave(window.__tmUserId||"",window.__tmOrgId||"").then(function(){window.location.reload()})}} style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#d97706",color:"white",fontSize:11,fontWeight:600,cursor:"pointer"}}>Inschakelen</button>
+        <button onClick={function(){PushNotify.registerAndSave(curUser?.id||"",orgId||"").then(function(){window.location.reload()})}} style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#d97706",color:"white",fontSize:11,fontWeight:600,cursor:"pointer"}}>Inschakelen</button>
       </div>
     :null}
   </div>;
@@ -2323,9 +2323,9 @@ function App(){
       if(user){
         try{
           let profile=await DB.getUserProfile(user.uid);
-          // Profile might not exist yet right after registration — retry once
-          if(!profile){
-            await new Promise(r=>setTimeout(r,1500));
+          // Profile might not exist yet right after registration — retry with backoff
+          for(let _r=0;!profile&&_r<3;_r++){
+            await new Promise(r=>setTimeout(r,1000*(_r+1)));
             profile=await DB.getUserProfile(user.uid);
           }
           var isSA=profile&&profile.role==="superadmin";
@@ -2339,7 +2339,7 @@ function App(){
             setAuthed(true);
           }else{
             // No profile found — show error, don't fall back to demo data
-            console.error("No Firestore profile found for user:",user.uid);
+            console.warn("No Firestore profile found for authenticated user");
             setStore(p=>({...p,curUser:{id:user.uid,name:user.displayName||"Gebruiker",email:user.email,role:"reporter",av:(user.displayName||"U").slice(0,2).toUpperCase()}}));
             setAuthed(true);
           }
@@ -2390,7 +2390,6 @@ function App(){
   // Register FCM token for push notifications (only if already granted)
   useEffect(()=>{
     if(!authed||!orgId||!store.curUser)return;
-    window.__tmUserId=store.curUser.id;window.__tmOrgId=orgId;
     if(PushNotify.permission==='granted'){
       PushNotify.registerAndSave(store.curUser.id,orgId);
     }
@@ -2567,12 +2566,12 @@ function App(){
     if(isSuperAdmin&&!impersonating)return <AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>;
     // Permission check — redirect to dashboard if no access
     if(page!=="detail"&&page!=="billing"&&page!=="admin"&&page!=="dashboard"&&!curPerms.includes(page)&&!isSuperAdmin){
-      return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+      return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")} curUser={store.curUser} orgId={orgId}/>;
     }
     if(page==="detail"&&cur)return <Detail mel={cur} org={store.org} users={store.users} cur={store.curUser} onBack={()=>nav("meldingen")} onUpdate={updMel} onNotify={notify}/>;
     if(page==="billing")return <Pricing sub={store.sub} org={store.org} onSelect={selPlan} onBack={()=>nav("dashboard")} onNotify={notify}/>;
     switch(page){
-      case"dashboard":return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+      case"dashboard":return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")} curUser={store.curUser} orgId={orgId}/>;
       case"meldingen":return <MeldingenList mel={store.meldingen} org={store.org} sub={store.sub} cur={store.curUser} orgId={orgId} onNav={nav} onNotify={notify}/>;
       case"new":return <NewMeld org={store.org} users={store.users} cur={store.curUser} sub={store.sub} onSubmit={addMel} onNav={nav} onNotify={notify}/>;
       case"building":return <Building org={store.org} sub={store.sub} role={isSuperAdmin?"admin":store.curUser?.role} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{buildings:o.buildings||[],floors:o.floors,rooms:o.rooms}).catch(e=>console.error(e))}} onNotify={notify}/>;
@@ -2583,8 +2582,8 @@ function App(){
       case"vergelijk":return <VergelijkendeRapportage org={store.org} orgId={orgId} onNotify={notify}/>;
       case"users":return <Users users={store.users} cur={store.curUser} orgId={orgId} sub={store.sub} onUpd={u=>setStore(p=>({...p,users:u}))} onNotify={notify}/>;
       case"settings":return <Settings org={store.org} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{name:o.name,type:o.type,buildings:o.buildings||[],btwNummer:o.btwNummer||"",address:o.address||"",postcode:o.postcode||"",city:o.city||""}).catch(e=>console.error(e))}} onNotify={notify} onNav={nav}/>;
-      case"admin":return store.curUser?.role==="superadmin"?<AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
-      default:return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+      case"admin":return store.curUser?.role==="superadmin"?<AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")} curUser={store.curUser} orgId={orgId}/>;
+      default:return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")} curUser={store.curUser} orgId={orgId}/>;
     }
   };
 
