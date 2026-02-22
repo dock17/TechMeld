@@ -9,11 +9,15 @@
     "headers": [
       {
         "source": "**/*.html",
-        "headers": [{"key": "Cache-Control", "value": "no-cache"}]
+        "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
       },
       {
         "source": "/app",
-        "headers": [{"key": "Cache-Control", "value": "no-cache"}]
+        "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
+      },
+      {
+        "source": "/firebase-messaging-sw.js",
+        "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]
       },
       {
         "source": "/sitemap.xml",

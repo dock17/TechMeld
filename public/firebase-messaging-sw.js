@@ -29,11 +29,18 @@ messaging.onBackgroundMessage(function(payload) {
 });
 
 // Cache management
-var CACHE_NAME = 'techmeld-v5';
+var CACHE_NAME = 'techmeld-v6';
 var ASSETS = ['/manifest.json'];
 
 self.addEventListener('install', function(e) {
-  e.waitUntil(caches.open(CACHE_NAME).then(function(c) { return c.addAll(ASSETS); }));
+  // Clear ALL old caches on install
+  e.waitUntil(
+    caches.keys().then(function(keys) {
+      return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+    }).then(function() {
+      return caches.open(CACHE_NAME).then(function(c) { return c.addAll(ASSETS); });
+    })
+  );
   self.skipWaiting();
 });
 
@@ -47,9 +54,11 @@ self.addEventListener('activate', function(e) {
 });
 
 self.addEventListener('fetch', function(e) {
-  // Network-first for HTML
+  // NEVER cache HTML — always fetch from network, bypass HTTP cache
   if (e.request.mode === 'navigate' || e.request.url.endsWith('.html')) {
-    e.respondWith(fetch(e.request).catch(function() { return caches.match(e.request); }));
+    e.respondWith(
+      fetch(e.request, { cache: 'no-store' }).catch(function() { return caches.match(e.request); })
+    );
     return;
   }
   // Cache-first for other assets
