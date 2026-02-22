@@ -230,6 +230,13 @@ service cloud.firestore {
     }
 
     // ════════════════════════════════════════════
+    // PAYPAL ORDERS (Cloud Functions only)
+    // ════════════════════════════════════════════
+    match /paypalOrders/{orderId} {
+      allow read, write: if false;
+    }
+
+    // ════════════════════════════════════════════
     // FCM TOKENS
     // ════════════════════════════════════════════
     match /fcmTokens/{tokenId} {

@@ -226,6 +226,155 @@ const PLANS_SERVER = {
   groep: { name:"Groepslicentie", price:129, yearPrice:Math.round(129*12*0.85) },
 };
 
+// ═══════════════════════════════════════════
+// PAYPAL ORDERS API v2
+// ═══════════════════════════════════════════
+const PAYPAL_BASE = "https://api-m.paypal.com";
+
+async function getPayPalAccessToken() {
+  const clientId = process.env.PAYPAL_CLIENT_ID;
+  const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error("PayPal credentials not configured");
+  const res = await fetch(PAYPAL_BASE + "/v1/oauth2/token", {
+    method: "POST",
+    headers: {
+      "Authorization": "Basic " + Buffer.from(clientId + ":" + clientSecret).toString("base64"),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+  });
+  if (!res.ok) throw new Error("PayPal auth failed: " + res.status);
+  const data = await res.json();
+  return data.access_token;
+}
+
+exports.createPayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIENT_ID","PAYPAL_CLIENT_SECRET"]}, async(req)=>{
+  if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
+  const{planId,billing}=req.data;
+  if(!planId||!billing) throw new HttpsError("invalid-argument","planId en billing zijn vereist");
+  const planInfo=PLANS_SERVER[planId];
+  if(!planInfo) throw new HttpsError("invalid-argument","Ongeldig plan: "+planId);
+  if(!["month","year"].includes(billing)) throw new HttpsError("invalid-argument","Ongeldige billing periode");
+  if(planInfo.price===0) throw new HttpsError("invalid-argument","Starter plan vereist geen betaling");
+  // Verify caller is admin of their org
+  const userDoc=await db.collection("users").doc(req.auth.uid).get();
+  if(!userDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
+  const userData=userDoc.data();
+  if(userData.role!=="admin") throw new HttpsError("permission-denied","Alleen admins kunnen abonnementen wijzigen");
+  const orgId=userData.orgId;
+  if(!orgId) throw new HttpsError("failed-precondition","Geen organisatie gevonden");
+  // Calculate price server-side (incl. 21% BTW)
+  const basePrice=billing==="year"?planInfo.yearPrice:planInfo.price;
+  const totalAmount=(basePrice*1.21).toFixed(2);
+  // Create PayPal order
+  const accessToken=await getPayPalAccessToken();
+  const desc="TechMeld "+planInfo.name+" — "+(billing==="year"?"jaarabonnement":"maandabonnement");
+  const ppRes=await fetch(PAYPAL_BASE+"/v2/checkout/orders",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+accessToken},
+    body:JSON.stringify({
+      intent:"CAPTURE",
+      purchase_units:[{
+        description:desc,
+        amount:{currency_code:"EUR",value:totalAmount},
+      }],
+      payment_source:{paypal:{experience_context:{
+        return_url:"https://techmeld.eu/app?paypal_status=success",
+        cancel_url:"https://techmeld.eu/app?paypal_status=cancelled",
+        brand_name:"TechMeld",
+        user_action:"PAY_NOW",
+      }}},
+    }),
+  });
+  if(!ppRes.ok){
+    const err=await ppRes.text();
+    console.error("PayPal create order error:",err);
+    throw new HttpsError("internal","PayPal order aanmaken mislukt");
+  }
+  const ppOrder=await ppRes.json();
+  // Save pending order in Firestore
+  await db.collection("paypalOrders").doc(ppOrder.id).set({
+    orderId:ppOrder.id,
+    orgId,
+    uid:req.auth.uid,
+    planId,
+    billing,
+    expectedAmount:totalAmount,
+    status:"CREATED",
+    createdAt:admin.firestore.FieldValue.serverTimestamp(),
+  });
+  // Find approval URL
+  const approveLink=ppOrder.links.find(l=>l.rel==="payer-action")||ppOrder.links.find(l=>l.rel==="approve");
+  if(!approveLink) throw new HttpsError("internal","PayPal approval URL niet gevonden");
+  console.log(`✅ PayPal order created: ${ppOrder.id} for org ${orgId} (${planInfo.name} ${billing})`);
+  return{orderId:ppOrder.id,approveUrl:approveLink.href};
+});
+
+exports.capturePayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIENT_ID","PAYPAL_CLIENT_SECRET"]}, async(req)=>{
+  if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
+  const{orderId}=req.data;
+  if(!orderId) throw new HttpsError("invalid-argument","orderId is vereist");
+  // Load pending order from Firestore
+  const orderDoc=await db.collection("paypalOrders").doc(orderId).get();
+  if(!orderDoc.exists) throw new HttpsError("not-found","PayPal order niet gevonden");
+  const orderData=orderDoc.data();
+  // Verify caller owns this order
+  if(orderData.uid!==req.auth.uid) throw new HttpsError("permission-denied","Order behoort niet tot deze gebruiker");
+  // Prevent double capture
+  if(orderData.status==="COMPLETED") throw new HttpsError("already-exists","Deze betaling is al verwerkt");
+  // Capture payment
+  const accessToken=await getPayPalAccessToken();
+  const capRes=await fetch(PAYPAL_BASE+"/v2/checkout/orders/"+orderId+"/capture",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+accessToken},
+  });
+  if(!capRes.ok){
+    const err=await capRes.text();
+    console.error("PayPal capture error:",err);
+    throw new HttpsError("internal","PayPal betaling vastleggen mislukt");
+  }
+  const capData=await capRes.json();
+  if(capData.status!=="COMPLETED"){
+    await db.collection("paypalOrders").doc(orderId).update({status:capData.status});
+    throw new HttpsError("failed-precondition","Betaling niet voltooid. Status: "+capData.status);
+  }
+  // Verify captured amount matches expected
+  const capture=capData.purchase_units[0].payments.captures[0];
+  const capturedAmount=capture.amount.value;
+  if(capturedAmount!==orderData.expectedAmount){
+    console.error(`Amount mismatch: captured ${capturedAmount} vs expected ${orderData.expectedAmount}`);
+    await db.collection("paypalOrders").doc(orderId).update({status:"AMOUNT_MISMATCH",capturedAmount});
+    throw new HttpsError("failed-precondition","Betaald bedrag komt niet overeen met verwacht bedrag");
+  }
+  // Activate subscription
+  const orgId=orderData.orgId;
+  const planInfo=PLANS_SERVER[orderData.planId];
+  const now=new Date();
+  const expiresAt=new Date(now);
+  if(orderData.billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
+  await db.collection("subscriptions").doc(orgId).update({
+    plan:orderData.planId,status:"active",billing:orderData.billing,
+    expiresAt:admin.firestore.Timestamp.fromDate(expiresAt),
+    activatedAt:admin.firestore.Timestamp.fromDate(now),
+    method:"paypal",updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+  });
+  // Create invoice with transaction ID
+  const basePrice=orderData.billing==="year"?planInfo.yearPrice:planInfo.price;
+  await db.collection("organizations").doc(orgId).collection("invoices").doc().set({
+    plan:planInfo.name,amount:basePrice,billing:orderData.billing,method:"paypal",
+    status:"betaald",date:now.toISOString(),
+    paypalOrderId:orderId,paypalTransactionId:capture.id,
+    createdAt:admin.firestore.FieldValue.serverTimestamp(),
+  });
+  // Mark PayPal order as completed
+  await db.collection("paypalOrders").doc(orderId).update({
+    status:"COMPLETED",capturedAt:admin.firestore.FieldValue.serverTimestamp(),
+    transactionId:capture.id,
+  });
+  console.log(`✅ PayPal payment captured: ${orderId} → ${planInfo.name} (${orderData.billing}) for org ${orgId}`);
+  return{success:true,plan:orderData.planId,status:"active",billing:orderData.billing,expiresAt:expiresAt.toISOString(),activatedAt:now.toISOString()};
+});
+
 exports.activateSubscription = onCall({region:"europe-west1"}, async(req)=>{
   if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
   const{planId,method,billing}=req.data;
@@ -233,7 +382,7 @@ exports.activateSubscription = onCall({region:"europe-west1"}, async(req)=>{
   const planInfo=PLANS_SERVER[planId];
   if(!planInfo) throw new HttpsError("invalid-argument","Ongeldig plan: "+planId);
   if(!["month","year"].includes(billing)) throw new HttpsError("invalid-argument","Ongeldige billing periode");
-  if(!["paypal","bank"].includes(method)) throw new HttpsError("invalid-argument","Ongeldige betaalmethode");
+  if(method!=="bank") throw new HttpsError("invalid-argument","Gebruik PayPal checkout voor PayPal-betalingen");
   // Verify caller is admin of their org
   const userDoc=await db.collection("users").doc(req.auth.uid).get();
   if(!userDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
@@ -308,5 +457,24 @@ exports.deleteOrganization = onCall({region:"europe-west1"}, async(req)=>{
   const b4=db.batch();tokSnap.forEach(d=>b4.delete(d.ref));await b4.commit();
   // Delete organization document
   await db.collection("organizations").doc(orgId).delete();
+  return{success:true};
+});
+
+// ═══════════════════════════════════════════
+// SEND INVOICE EMAIL
+// ═══════════════════════════════════════════
+exports.sendInvoiceEmail = onCall({region:"europe-west1",secrets:["EMAIL_PASS"]}, async(req)=>{
+  if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
+  const{invoiceHtml,planName}=req.data;
+  if(!invoiceHtml) throw new HttpsError("invalid-argument","invoiceHtml is vereist");
+  // Verify caller is admin of their org
+  const userDoc=await db.collection("users").doc(req.auth.uid).get();
+  if(!userDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
+  const userData=userDoc.data();
+  if(userData.role!=="admin") throw new HttpsError("permission-denied","Alleen admins kunnen facturen versturen");
+  if(!userData.email) throw new HttpsError("failed-precondition","Geen e-mailadres gevonden");
+  const subject="Factuur TechMeld"+(planName?" — "+planName:"");
+  await getTransporter().sendMail({from:FROM,to:userData.email,subject,html:invoiceHtml});
+  console.log(`✅ Invoice email sent to ${userData.email}`);
   return{success:true};
 });

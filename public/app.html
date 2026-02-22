@@ -635,7 +635,7 @@ const SubExpiredScreen=({sub,onRenew,onLogout})=>{
   </div>;
 };
 // ═══════════════════════════════════════════
-const Pricing=({sub,onSelect,onBack,onNotify})=>{
+const Pricing=({sub,org,onSelect,onBack,onNotify})=>{
   const[sel,setSel]=useState("professional");
   const[pay,setPay]=useState("paypal");
   const[step,setStep]=useState("plans");
@@ -647,35 +647,70 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
   const period=billing==="year"?"jaar":"maand";
   const savings=billing==="year"?Math.round(plan.price*12-plan.yearPrice):0;
 
-  const doPay=()=>{
+  const doPay=async()=>{
     if(pay==="paypal"){
-      // Real PayPal redirect
-      const amt=(totalPrice*1.21).toFixed(2);
-      const desc="TechMeld "+plan.name+" - "+(billing==="year"?"jaarabonnement":"maandabonnement");
-      const form=document.createElement("form");form.method="POST";form.action="https://www.paypal.com/cgi-bin/webscr";form.target="_blank";
-      [["cmd","_xclick"],["business","tigrealata@hotmail.com"],["item_name",desc],["amount",amt],["currency_code","EUR"],["return",window.location.href],["cancel_return",window.location.href]].forEach(function(p){var i=document.createElement("input");i.type="hidden";i.name=p[0];i.value=p[1];form.appendChild(i)});
-      document.body.appendChild(form);form.submit();document.body.removeChild(form);
-      setBusy(true);setTimeout(function(){setBusy(false);setStep("confirm_paypal")},1500);
+      setBusy(true);
+      try{
+        const createOrder=functions.httpsCallable("createPayPalOrder");
+        const result=await createOrder({planId:sel,billing});
+        // Store order context for return
+        try{sessionStorage.setItem("tm_paypal_order",JSON.stringify({orderId:result.data.orderId,planId:sel,billing}))}catch(e){}
+        // Redirect to PayPal in same tab
+        window.location.href=result.data.approveUrl;
+      }catch(e){
+        console.error("PayPal order error:",e);
+        setBusy(false);
+        onNotify({title:"PayPal fout",msg:e.message||"Probeer opnieuw",type:"error"});
+      }
     }else{
       // Bank transfer - show invoice
       setStep("invoice_bank");
     }
   };
 
-  // CONFIRM PAYPAL
-  if(step==="confirm_paypal"){
-    return <div style={{padding:"20px 16px",maxWidth:500,margin:"0 auto"}}>
-      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.border,padding:24,textAlign:"center"}}>
-        <Icon name="paypal" size={48} color="#003087"/>
-        <h3 style={{fontSize:18,fontWeight:700,margin:"14px 0 6px"}}>PayPal betaling bevestigen</h3>
-        <p style={{fontSize:13,color:C.sub,marginBottom:20}}>Heeft u de betaling op PayPal afgerond?</p>
-        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-          <Btn onClick={function(){onSelect(sel,"paypal",billing);setStep("invoice");onNotify({title:"Betaling ontvangen!",msg:plan.name+" geactiveerd",type:"success"})}} sx={{padding:"10px 24px"}}>Ja, ik heb betaald</Btn>
-          <Btn onClick={function(){setStep("payment")}} v="secondary" sx={{padding:"10px 24px"}}>Annuleren</Btn>
-        </div>
-      </div>
-    </div>;
-  }
+  // ── Invoice helpers: build HTML, print PDF, send email ──
+  const buildInvoiceHtml=(invoiceNr,klantNr,method)=>{
+    const orgName=org?.name||sub?.orgName||"Uw organisatie";
+    const addr=org?.address||"";
+    const pc=[org?.postcode,org?.city].filter(Boolean).join(" ");
+    const btw=org?.btwNummer||"";
+    const desc="TechMeld "+plan.name+" — "+(billing==="year"?"jaarabonnement (15% korting)":"maandabonnement");
+    const btwAmt=(totalPrice*.21).toFixed(2).replace(".",",");
+    const totAmt=(totalPrice*1.21).toFixed(2).replace(".",",");
+    const baseAmt=fmtMoney(totalPrice);
+    const dateStr=new Date().toLocaleDateString("nl-BE");
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:24px;font-family:Arial,sans-serif;color:#1e293b;font-size:13px}h1{font-size:22px;color:#2563eb;margin:0}table{width:100%;border-collapse:collapse}th,td{padding:8px 0;text-align:left}th{font-size:10px;text-transform:uppercase;color:#94a3b8;border-bottom:2px solid #e2e8f0}td{border-bottom:1px solid #e2e8f0}.right{text-align:right}.bold{font-weight:700}.sub{color:#64748b}.dim{color:#94a3b8;font-size:10px}.total td{font-size:15px;font-weight:800;border-bottom:none}.accent{color:#2563eb}.bank{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;margin:14px 0}.bank-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.paid{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;color:#16a34a;font-weight:600;margin:14px 0}@media print{body{padding:16px}}</style></head><body>`+
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div><h1>TechMeld™</h1><div class="sub" style="font-size:11px;margin-top:2px">Technische Dienst Management</div></div><div style="text-align:right"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">FACTUUR</div><div class="sub" style="margin-top:2px">${invoiceNr}</div><div class="dim">${dateStr}</div></div></div>`+
+    `<div style="display:flex;justify-content:space-between;margin-bottom:18px"><div><div class="dim" style="text-transform:uppercase;margin-bottom:3px">Van</div><div class="bold">TechMeld</div><div class="sub">Genk, België</div><div class="sub">BTW: BE0XXX.XXX.XXX</div><div class="sub">info@techmeld.eu</div></div><div style="text-align:right"><div class="dim" style="text-transform:uppercase;margin-bottom:3px">Aan</div><div class="bold">${orgName}</div>${addr?"<div class='sub'>"+addr+"</div>":""}${pc?"<div class='sub'>"+pc+"</div>":""}${btw?"<div class='sub'>BTW: "+btw+"</div>":""}<div class="sub">Klantnummer: ${klantNr}</div></div></div>`+
+    `<table><thead><tr><th>Omschrijving</th><th class="right">Bedrag</th></tr></thead><tbody><tr><td>${desc}</td><td class="right bold">${baseAmt}</td></tr><tr><td class="sub">BTW (21%)</td><td class="right sub">€${btwAmt}</td></tr><tr class="total"><td>Totaal</td><td class="right accent">€${totAmt}</td></tr></tbody></table>`+
+    (method==="bank"?`<div class="bank"><div class="bold accent" style="margin-bottom:8px">Betaling via overschrijving</div><div class="bank-grid"><div><div class="dim">IBAN</div><div class="bold">BE05 9531 0129 8075</div></div><div><div class="dim">BIC</div><div class="bold">GEBABEBB</div></div><div><div class="dim">Begunstigde</div><div class="bold">TechMeld — Domenico Sciarrone</div></div><div><div class="dim">Mededeling</div><div class="bold accent">${invoiceNr}</div></div></div><div class="sub" style="margin-top:8px;padding-top:8px;border-top:1px solid #bfdbfe;font-size:11px">Gelieve het factuurnummer als mededeling te vermelden. Betaling binnen 14 dagen.</div></div>`:`<div class="paid">✓ Betaald via PayPal</div>`)+
+    `<div class="dim" style="border-top:1px solid #e2e8f0;padding-top:10px;line-height:1.5"><strong>TechMeld</strong> — Bijberoep · Genk, België · BTW: BE0XXX.XXX.XXX<br>Vragen: info@techmeld.eu · © ${new Date().getFullYear()} TechMeld™</div>`+
+    `</body></html>`;
+  };
+
+  const handlePrintPdf=(invoiceNr,klantNr,method)=>{
+    const html=buildInvoiceHtml(invoiceNr,klantNr,method);
+    const iframe=document.createElement("iframe");
+    iframe.style.cssText="position:fixed;top:0;left:0;width:0;height:0;border:none;visibility:hidden";
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    iframe.contentWindow.onafterprint=()=>{document.body.removeChild(iframe)};
+    setTimeout(()=>{iframe.contentWindow.focus();iframe.contentWindow.print()},300);
+  };
+
+  const handleEmailInvoice=async(invoiceNr,klantNr,method)=>{
+    try{
+      const html=buildInvoiceHtml(invoiceNr,klantNr,method);
+      const sendInvoice=functions.httpsCallable("sendInvoiceEmail");
+      await sendInvoice({invoiceHtml:html,planName:plan.name});
+      onNotify({title:"Factuur verstuurd per e-mail",type:"success"});
+    }catch(e){
+      console.error("Email invoice error:",e);
+      onNotify({title:"E-mail verzenden mislukt",msg:e.message||"Probeer opnieuw",type:"error"});
+    }
+  };
 
   // INVOICE BANK TRANSFER
   if(step==="invoice_bank"){
@@ -700,7 +735,10 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontSize:10,color:C.dim,textTransform:"uppercase",marginBottom:3}}>Aan</div>
-              <div style={{fontSize:13,fontWeight:600}}>{sub?.orgName||"Uw organisatie"}</div>
+              <div style={{fontSize:13,fontWeight:600}}>{org?.name||sub?.orgName||"Uw organisatie"}</div>
+              {org?.address&&<div style={{fontSize:12,color:C.sub}}>{org.address}</div>}
+              {(org?.postcode||org?.city)&&<div style={{fontSize:12,color:C.sub}}>{[org.postcode,org.city].filter(Boolean).join(" ")}</div>}
+              {org?.btwNummer&&<div style={{fontSize:12,color:C.sub}}>{"BTW: "+org.btwNummer}</div>}
               <div style={{fontSize:12,color:C.sub}}>{"Klantnummer: "+klnr}</div>
             </div>
           </div>
@@ -725,14 +763,14 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
           </div>
           <div style={{fontSize:10,color:C.dim,lineHeight:1.5,borderTop:"1px solid "+C.border,paddingTop:10}}>
             <strong>TechMeld</strong> {" — Bijberoep · Genk, België · BTW: BE0XXX.XXX.XXX"}<br/>
-            {"Vragen: factuur@techmeld.eu · © "+new Date().getFullYear()+" TechMeld™"}
+            {"Vragen: info@techmeld.eu · © "+new Date().getFullYear()+" TechMeld™"}
           </div>
           <div style={{textAlign:"center",fontSize:10,color:C.dim,marginTop:10,fontStyle:"italic"}}>Automatisch gegenereerd via TechMeld</div>
         </div>
         <div style={{padding:"12px 20px",borderTop:"1px solid "+C.border,display:"flex",gap:8,background:"#f8fafc",flexWrap:"wrap"}}>
           <Btn onClick={onBack} v="secondary" sm>{"← Dashboard"}</Btn>
-          <Btn onClick={function(){onNotify({title:"Factuur verstuurd per e-mail",type:"success"})}} sm>{"📧 E-mailen"}</Btn>
-          <Btn onClick={function(){onNotify({title:"PDF gedownload",type:"success"})}} v="secondary" sm>{"📥 PDF"}</Btn>
+          <Btn onClick={function(){handleEmailInvoice(nr,klnr,"bank")}} sm>{"📧 E-mailen"}</Btn>
+          <Btn onClick={function(){handlePrintPdf(nr,klnr,"bank")}} v="secondary" sm>{"📥 PDF"}</Btn>
         </div>
       </div>
     </div>;
@@ -741,6 +779,7 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
   // INVOICE
   if(step==="invoice"){
     const nr="TM-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9999)).padStart(4,'0');
+    const klnr="KL-"+String(Math.floor(Math.random()*9999)).padStart(4,"0");
     return <div style={{padding:"20px 16px",maxWidth:580,margin:"0 auto"}}>
       <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.border,overflow:"hidden",boxShadow:"0 4px 20px rgba(0,0,0,.04)"}}>
         <div style={{padding:"24px",borderBottom:"1px solid "+C.border,background:"#f8fafc"}}>
@@ -752,7 +791,7 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
         <div style={{padding:"20px 24px"}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:18,flexWrap:"wrap",gap:12}}>
             <div><div style={{fontSize:10,color:C.dim,textTransform:"uppercase",letterSpacing:".05em",marginBottom:3}}>Van</div><div style={{fontSize:13,fontWeight:600}}>TechMeld</div><div style={{fontSize:12,color:C.sub}}>Genk, België</div><div style={{fontSize:12,color:C.sub}}>Bijberoep: BE0XXX.XXX.XXX</div><div style={{fontSize:12,color:C.sub}}>info@techmeld.eu</div></div>
-            <div style={{textAlign:"right"}}><div style={{fontSize:10,color:C.dim,textTransform:"uppercase",letterSpacing:".05em",marginBottom:3}}>Aan</div><div style={{fontSize:13,fontWeight:600}}>{sub?.orgName||"Uw organisatie"}</div><div style={{fontSize:12,color:C.sub}}>{"Klantnummer: KL-"+String(Math.floor(Math.random()*9999)).padStart(4,"0")}</div></div>
+            <div style={{textAlign:"right"}}><div style={{fontSize:10,color:C.dim,textTransform:"uppercase",letterSpacing:".05em",marginBottom:3}}>Aan</div><div style={{fontSize:13,fontWeight:600}}>{org?.name||sub?.orgName||"Uw organisatie"}</div>{org?.address&&<div style={{fontSize:12,color:C.sub}}>{org.address}</div>}{(org?.postcode||org?.city)&&<div style={{fontSize:12,color:C.sub}}>{[org.postcode,org.city].filter(Boolean).join(" ")}</div>}{org?.btwNummer&&<div style={{fontSize:12,color:C.sub}}>{"BTW: "+org.btwNummer}</div>}<div style={{fontSize:12,color:C.sub}}>{"Klantnummer: "+klnr}</div></div>
           </div>
           <table style={{width:"100%",borderCollapse:"collapse",marginBottom:16}}>
             <thead><tr style={{borderBottom:"2px solid "+C.border}}><th style={{textAlign:"left",padding:"6px 0",fontSize:10,color:C.dim,textTransform:"uppercase",fontWeight:600}}>Omschrijving</th><th style={{textAlign:"right",padding:"6px 0",fontSize:10,color:C.dim,textTransform:"uppercase",fontWeight:600}}>Bedrag</th></tr></thead>
@@ -765,14 +804,14 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
           <div style={{display:"flex",gap:8,alignItems:"center",padding:"8px 12px",background:"#f0fdf4",borderRadius:6,border:"1px solid #bbf7d0",marginBottom:14}}><Icon name="check" size={16} color="#16a34a"/><span style={{fontSize:12,color:"#16a34a",fontWeight:600}}>Betaald via PayPal</span></div>
           <div style={{fontSize:10,color:C.dim,lineHeight:1.5,borderTop:"1px solid "+C.border,paddingTop:10}}>
             <strong>TechMeld</strong>{" — Bijberoep · Genk, België · BTW: BE0XXX.XXX.XXX"}<br/>
-            {"Vragen: factuur@techmeld.eu · © "+new Date().getFullYear()+" TechMeld™"}
+            {"Vragen: info@techmeld.eu · © "+new Date().getFullYear()+" TechMeld™"}
           </div>
           <div style={{textAlign:"center",fontSize:10,color:C.dim,marginTop:10,fontStyle:"italic"}}>Automatisch gegenereerd via TechMeld</div>
         </div>
         <div style={{padding:"12px 20px",borderTop:"1px solid "+C.border,display:"flex",gap:8,background:"#f8fafc",flexWrap:"wrap"}}>
           <Btn onClick={onBack} v="secondary" sm><Icon name="back" size={14}/> Dashboard</Btn>
-          <Btn onClick={function(){onNotify({title:"Factuur verstuurd per e-mail",type:"success"})}} v="success" sm><Icon name="receipt" size={14}/> E-mailen</Btn>
-          <Btn onClick={()=>onNotify({title:"PDF gedownload",type:"success"})} v="secondary" sm><Icon name="download" size={14}/> PDF</Btn>
+          <Btn onClick={function(){handleEmailInvoice(nr,klnr,"paypal")}} v="success" sm><Icon name="receipt" size={14}/> E-mailen</Btn>
+          <Btn onClick={function(){handlePrintPdf(nr,klnr,"paypal")}} v="secondary" sm><Icon name="download" size={14}/> PDF</Btn>
         </div>
       </div>
     </div>;
@@ -800,8 +839,8 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
             <div style={{fontSize:11,color:C.sub}}>U ontvangt een factuur met IBAN en betalingsgegevens. Uw abonnement wordt geactiveerd na ontvangst van betaling (binnen 24u).</div>
           </div>}
           {pay==="paypal"&&<div style={{padding:14,background:"#fff7ed",borderRadius:10,border:"1px solid #fed7aa",marginBottom:16}}>
-            <div style={{fontSize:12,color:"#ea580c",fontWeight:600,marginBottom:4}}>Betaling via PayPal</div>
-            <div style={{fontSize:11,color:C.sub}}>U wordt doorgestuurd naar PayPal. Ook zonder PayPal-account kunt u betalen met creditcard of bancontact.</div>
+            <div style={{fontSize:12,color:"#ea580c",fontWeight:600,marginBottom:4}}>Veilige betaling via PayPal</div>
+            <div style={{fontSize:11,color:C.sub}}>U wordt doorgestuurd naar PayPal voor een beveiligde betaling. Na betaling keert u automatisch terug en wordt uw abonnement direct geactiveerd.</div>
           </div>}
           <div style={{background:"#f8fafc",borderRadius:8,padding:12,marginBottom:14}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:C.sub}}>{plan.name} {billing==="year"?"(jaar, -15%)":"(maand)"}</span><span style={{fontSize:12,fontWeight:600}}>{fmtMoney(totalPrice)}</span></div>
@@ -1740,6 +1779,9 @@ const SUPER_ADMINS=["tigrealata@hotmail.com","info@techmeld.eu"];
 const AdminPanel=({curUser,onImpersonate})=>{
   const[orgs,setOrgs]=useState([]);const[allUsers,setAllUsers]=useState([]);const[subs,setSubs]=useState([]);const[trials,setTrials]=useState([]);const[loading,setLoading]=useState(true);
   const[confirm,setConfirm]=useState(null);const[search,setSearch]=useState("");const[tab,setTab]=useState("orgs");
+  const[activateModal,setActivateModal]=useState(null); // {orgId, orgName, currentPlan}
+  const[actPlan,setActPlan]=useState("professional");
+  const[actBilling,setActBilling]=useState("month");
   useEffect(()=>{
     if(!firebaseReady)return;
     var unsubs=[];
@@ -1766,6 +1808,29 @@ const AdminPanel=({curUser,onImpersonate})=>{
     await db.collection('subscriptions').doc(orgId).set({plan:plan||"starter",status:"trial",trialEnd:firebase.firestore.Timestamp.fromDate(trialEnd),orgId:orgId},{merge:true});
     setConfirm(null);
   };
+  var activateSub=async function(orgId,planId,billing){
+    var planInfo=PLANS.find(function(p){return p.id===planId});
+    if(!planInfo)return;
+    var now=new Date();
+    var expiresAt=new Date(now);
+    if(billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
+    await db.collection('subscriptions').doc(orgId).set({
+      plan:planId,status:"active",billing:billing,
+      expiresAt:firebase.firestore.Timestamp.fromDate(expiresAt),
+      activatedAt:firebase.firestore.Timestamp.fromDate(now),
+      method:"bank",updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      orgId:orgId
+    },{merge:true});
+    // Create invoice record
+    var price=billing==="year"?planInfo.yearPrice:planInfo.price;
+    await db.collection('organizations').doc(orgId).collection('invoices').doc().set({
+      plan:planInfo.name,amount:price,billing:billing,method:"bank",
+      status:"betaald",date:now.toISOString(),
+      activatedBy:curUser.email,
+      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    setActivateModal(null);
+  };
 
   const filteredOrgs=orgs.filter(o=>{const q=search.toLowerCase();if(!q)return true;const orgUsers=allUsers.filter(u=>u.orgId===o.id);return(o.name||"").toLowerCase().includes(q)||orgUsers.some(u=>(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q))});
   const activeTrials=subs.filter(s=>s.status==="trial"&&s.trialEnd&&new Date(s.trialEnd)>new Date()).length;
@@ -1788,6 +1853,28 @@ const AdminPanel=({curUser,onImpersonate})=>{
         <div style={{display:"flex",gap:10}}>
           <Btn onClick={confirm.action} v="danger" sx={{flex:1}}>Ja, verwijderen</Btn>
           <Btn onClick={function(){setConfirm(null)}} v="secondary" sx={{flex:1}}>Annuleren</Btn>
+        </div>
+      </div>
+    </div>}
+
+    {/* Activate subscription modal */}
+    {activateModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:420,width:"100%",boxShadow:"0 8px 30px rgba(0,0,0,.15)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <div style={{width:32,height:32,borderRadius:8,background:"#f0fdf4",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="crown" size={18} color="#16a34a"/></div>
+          <div><div style={{fontSize:16,fontWeight:700}}>Abonnement activeren</div><div style={{fontSize:12,color:C.sub}}>{activateModal.orgName}</div></div>
+        </div>
+        <div style={{marginBottom:12}}><Sel label="Plan" value={actPlan} onChange={function(v){setActPlan(v)}} options={PLANS.filter(function(p){return !p.free}).map(function(p){return {v:p.id,l:p.name+" — €"+p.price+"/mnd"}})}/></div>
+        <div style={{marginBottom:14}}><Sel label="Facturatieperiode" value={actBilling} onChange={function(v){setActBilling(v)}} options={[{v:"month",l:"Maandelijks"},{v:"year",l:"Jaarlijks (15% korting)"}]}/></div>
+        {(function(){var p=PLANS.find(function(x){return x.id===actPlan});if(!p)return null;var base=actBilling==="year"?p.yearPrice:p.price;var tot=(base*1.21).toFixed(2).replace(".",",");var exp=new Date();if(actBilling==="year"){exp.setFullYear(exp.getFullYear()+1)}else{exp.setMonth(exp.getMonth()+1)};return <div style={{background:"#f8fafc",borderRadius:8,padding:12,marginBottom:14,border:"1px solid "+C.border}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:C.sub}}>{p.name} ({actBilling==="year"?"jaar":"maand"})</span><span style={{fontSize:12,fontWeight:600}}>{"€"+base}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:C.sub}}>BTW (21%)</span><span style={{fontSize:12}}>{"€"+(base*.21).toFixed(2).replace(".",",")}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",paddingTop:6,borderTop:"1px solid "+C.border}}><span style={{fontSize:13,fontWeight:700}}>Totaal</span><span style={{fontSize:13,fontWeight:800,color:C.accent}}>{"€"+tot}</span></div>
+          <div style={{fontSize:10,color:C.dim,marginTop:6}}>Geldig tot: {exp.toLocaleDateString("nl-BE",{day:"numeric",month:"long",year:"numeric"})}</div>
+        </div>})()}
+        <div style={{display:"flex",gap:10}}>
+          <Btn onClick={function(){activateSub(activateModal.orgId,actPlan,actBilling)}} sx={{flex:1}}>Activeren</Btn>
+          <Btn onClick={function(){setActivateModal(null)}} v="secondary" sx={{flex:1}}>Annuleren</Btn>
         </div>
       </div>
     </div>}
@@ -1823,6 +1910,7 @@ const AdminPanel=({curUser,onImpersonate})=>{
             {expired&&<Tag c="#dc2626" bg="#fef2f2">Verlopen</Tag>}
             {sub?.status==="active"&&<Tag c="#16a34a" bg="#f0fdf4">Actief</Tag>}
             <button onClick={function(){onImpersonate(org.id,org.name)}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+C.accent,background:C.accentBg,cursor:"pointer",fontSize:10,fontWeight:600,color:C.accent,display:"flex",alignItems:"center",gap:4}} title="Bekijk als deze organisatie"><Icon name="users" size={12} color={C.accent}/>Bekijk</button>
+            <button onClick={function(){setActPlan(sub?.plan&&sub.plan!=="starter"?sub.plan:"professional");setActBilling(sub?.billing||"month");setActivateModal({orgId:org.id,orgName:org.name||"Organisatie",currentPlan:plan?.name})}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #16a34a",background:"#f0fdf4",cursor:"pointer",fontSize:10,fontWeight:600,color:"#15803d",display:"flex",alignItems:"center",gap:4}} title="Betaling bevestigen & abonnement activeren"><Icon name="crown" size={12} color="#16a34a"/>Activeer</button>
             <button onClick={function(){setConfirm({title:"Subscription resetten?",msg:"Reset "+org.name+" naar Starter trial (14 dagen). Huidig plan: "+(plan?.name||"geen"),action:function(){resetSub(org.id,"starter")}})}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #d97706",background:"#fef3c7",cursor:"pointer",fontSize:10,fontWeight:600,color:"#92400e",display:"flex",alignItems:"center",gap:4}} title="Reset subscription"><Icon name="time" size={12} color="#d97706"/>Reset</button>
             <button onClick={function(){setConfirm({title:"Organisatie verwijderen?",msg:"Dit verwijdert "+org.name+", alle meldingen, facturen, accounts en "+orgUsers.length+" gebruiker(s). Dit kan niet ongedaan worden!",action:function(){deleteOrg(org.id)}})}} style={{width:26,height:26,borderRadius:6,border:"1px solid #fecaca",background:"#fef2f2",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="delete" size={13} color="#dc2626"/></button>
           </div>
@@ -1858,7 +1946,7 @@ const AdminPanel=({curUser,onImpersonate})=>{
 };
 
 const Settings=({org,onUpd,onNotify,onNav})=>{
-  const[form,setForm]=useState({name:org.name,type:org.type});
+  const[form,setForm]=useState({name:org.name,type:org.type,btwNummer:org.btwNummer||"",address:org.address||"",postcode:org.postcode||"",city:org.city||""});
   const[notif,setNotif]=useState({push:true,email:true});
   const Tog=({value,onChange,label})=><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid "+C.border}}><span style={{fontSize:13}}>{label}</span><button onClick={()=>onChange(!value)} style={{width:40,height:22,borderRadius:11,border:"none",cursor:"pointer",padding:2,background:value?C.accent:"#cbd5e1",display:"flex",alignItems:"center",justifyContent:value?"flex-end":"flex-start",transition:"all .2s"}}><div style={{width:18,height:18,borderRadius:9,background:"white",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}/></button></div>;
   return <div style={{padding:"20px 16px",maxWidth:600}}>
@@ -1869,6 +1957,16 @@ const Settings=({org,onUpd,onNotify,onNav})=>{
       <Inp label="Naam" value={form.name} onChange={v=>setForm({...form,name:v})}/>
       <div style={{marginTop:10}}><Sel label="Type" value={form.type} onChange={v=>setForm({...form,type:v})} options={[{v:"hospital",l:"Ziekenhuis"},{v:"care",l:"Zorginstelling"},{v:"hotel",l:"Hotel"}]}/></div>
       <div style={{marginTop:12}}><Btn onClick={()=>{var updated={...org,...form};if(updated.buildings&&updated.buildings.length===1){updated.buildings=[{...updated.buildings[0],name:form.name}]}onUpd(updated);onNotify({title:"Opgeslagen",type:"success"})}} sm>Opslaan</Btn></div>
+    </div>
+    <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:14}}>
+      <h3 style={{fontSize:14,fontWeight:700,margin:"0 0 12px"}}>Facturatiegegevens</h3>
+      <Inp label="BTW-nummer" value={form.btwNummer} onChange={v=>setForm({...form,btwNummer:v})} placeholder="bijv. BE0123.456.789"/>
+      <div style={{marginTop:10}}><Inp label="Adres" value={form.address} onChange={v=>setForm({...form,address:v})} placeholder="Straat en huisnummer"/></div>
+      <div style={{marginTop:10,display:"flex",gap:10}}>
+        <div style={{flex:"0 0 120px"}}><Inp label="Postcode" value={form.postcode} onChange={v=>setForm({...form,postcode:v})} placeholder="3600"/></div>
+        <div style={{flex:1}}><Inp label="Plaats" value={form.city} onChange={v=>setForm({...form,city:v})} placeholder="Genk"/></div>
+      </div>
+      <div style={{marginTop:12}}><Btn onClick={()=>{var updated={...org,...form};onUpd(updated);onNotify({title:"Facturatiegegevens opgeslagen",type:"success"})}} sm>Opslaan</Btn></div>
     </div>
     <div style={{background:C.card,borderRadius:12,border:"1px solid "+C.border,padding:16,marginBottom:14}}>
       <h3 style={{fontSize:14,fontWeight:700,margin:"0 0 10px"}}>Notificaties</h3>
@@ -2204,6 +2302,18 @@ function App(){
     return null;
   });
 
+  // Detect PayPal return (after redirect back from PayPal)
+  const[paypalReturn,setPaypalReturn]=useState(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const status=params.get("paypal_status");
+    const token=params.get("token");
+    if(status&&token){
+      window.history.replaceState({},"",window.location.pathname);
+      return{status,orderId:token};
+    }
+    return null;
+  });
+
   // Firebase Auth State Listener
   useEffect(()=>{
     if(!firebaseReady){setLoading(false);return}
@@ -2301,6 +2411,38 @@ function App(){
 
   const notify=useCallback(({title,msg="",type="info"})=>{const id=uid();setToasts(p=>[...p,{id,title,msg,type}]);setTimeout(()=>setToasts(p=>p.filter(n=>n.id!==id)),4000)},[]);
   const nav=useCallback((pg,id=null)=>{setPage(pg);if(id)setDetId(id);try{sessionStorage.setItem("tm_page",pg)}catch(e){}},[]);
+
+  // PayPal return: capture payment after redirect back
+  useEffect(()=>{
+    if(!paypalReturn||!authed)return;
+    if(paypalReturn.status==="cancelled"){
+      notify({title:"Betaling geannuleerd",msg:"U heeft de PayPal betaling geannuleerd.",type:"info"});
+      setPaypalReturn(null);
+      try{sessionStorage.removeItem("tm_paypal_order")}catch(e){}
+      return;
+    }
+    if(paypalReturn.status==="success"&&paypalReturn.orderId){
+      const capture=async()=>{
+        try{
+          const captureOrder=functions.httpsCallable("capturePayPalOrder");
+          const result=await captureOrder({orderId:paypalReturn.orderId});
+          if(result.data.success){
+            setStore(p=>({...p,sub:{...p.sub,...result.data}}));
+            notify({title:"Betaling ontvangen!",msg:"Uw abonnement is geactiveerd.",type:"success"});
+            nav("billing");
+          }
+        }catch(e){
+          console.error("PayPal capture error:",e);
+          const msg=e.code==="already-exists"?"Deze betaling is al verwerkt.":(e.message||"Neem contact op met support.");
+          notify({title:"Betaling mislukt",msg,type:"error"});
+        }finally{
+          setPaypalReturn(null);
+          try{sessionStorage.removeItem("tm_paypal_order")}catch(e){}
+        }
+      };
+      capture();
+    }
+  },[paypalReturn,authed]);
 
   const updMel=useCallback(u=>{
     setStore(p=>({...p,meldingen:p.meldingen.map(m=>m.id===u.id?u:m)}));
@@ -2426,7 +2568,7 @@ function App(){
       return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
     }
     if(page==="detail"&&cur)return <Detail mel={cur} org={store.org} users={store.users} cur={store.curUser} onBack={()=>nav("meldingen")} onUpdate={updMel} onNotify={notify}/>;
-    if(page==="billing")return <Pricing sub={store.sub} onSelect={selPlan} onBack={()=>nav("dashboard")} onNotify={notify}/>;
+    if(page==="billing")return <Pricing sub={store.sub} org={store.org} onSelect={selPlan} onBack={()=>nav("dashboard")} onNotify={notify}/>;
     switch(page){
       case"dashboard":return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
       case"meldingen":return <MeldingenList mel={store.meldingen} org={store.org} sub={store.sub} cur={store.curUser} orgId={orgId} onNav={nav} onNotify={notify}/>;
@@ -2438,7 +2580,7 @@ function App(){
       case"locaties":return <LocatieBeheer org={store.org} orgId={orgId} onNotify={notify}/>;
       case"vergelijk":return <VergelijkendeRapportage org={store.org} orgId={orgId} onNotify={notify}/>;
       case"users":return <Users users={store.users} cur={store.curUser} orgId={orgId} sub={store.sub} onUpd={u=>setStore(p=>({...p,users:u}))} onNotify={notify}/>;
-      case"settings":return <Settings org={store.org} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{name:o.name,type:o.type,buildings:o.buildings||[]}).catch(e=>console.error(e))}} onNotify={notify} onNav={nav}/>;
+      case"settings":return <Settings org={store.org} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{name:o.name,type:o.type,buildings:o.buildings||[],btwNummer:o.btwNummer||"",address:o.address||"",postcode:o.postcode||"",city:o.city||""}).catch(e=>console.error(e))}} onNotify={notify} onNav={nav}/>;
       case"admin":return SUPER_ADMINS.includes(store.curUser?.email)?<AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
       default:return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
     }
