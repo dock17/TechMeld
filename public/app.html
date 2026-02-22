@@ -195,6 +195,7 @@ const sanitize=(obj)=>{
   if(Array.isArray(obj))return obj.map(sanitize);
   const out={};for(const k of Object.keys(obj))out[k]=sanitize(obj[k]);return out;
 };
+const escHtml=(s)=>s?String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"):"";
 const DB = {
   // AUTH
   async register(email, password, name, orgName, orgType) {
@@ -1186,9 +1187,9 @@ const Rapportage=({mel,org,users,onNotify})=>{
       const tech=users.find(u=>u.id===m.to);
       const d1=new Date(m.at);const d2=new Date(m.resolvedAt||m.up);
       const hrs=Math.round((d2-d1)/(36e5));
-      return{title:m.title,desc:m.desc,cat:m.cat,prio:PRIORITY[m.prio]?.l||m.prio,loc:(bld?bld.name+" · ":"")+(floor?.name||"")+" - "+(room?.name||""),tech:tech?.name||"Niet toegewezen",date:fmtDate(m.at),resolved:fmtDate(m.resolvedAt||m.up),time:hrs+"u",comments:m.comments.length};
+      return{title:escHtml(m.title),desc:escHtml(m.desc),cat:escHtml(m.cat),prio:escHtml(PRIORITY[m.prio]?.l||m.prio),loc:escHtml((bld?bld.name+" · ":"")+(floor?.name||"")+" - "+(room?.name||"")),tech:escHtml(tech?.name||"Niet toegewezen"),date:fmtDate(m.at),resolved:fmtDate(m.resolvedAt||m.up),time:hrs+"u",comments:m.comments.length};
     });
-    var h='<!DOCTYPE html><html><head><title>TechMeld Rapport - '+mn;
+    var h='<!DOCTYPE html><html><head><title>TechMeld Rapport - '+escHtml(mn);
     h+='<\/title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:32px;color:#1e293b;font-size:12px}';
     h+='.header{display:flex;justify-content:space-between;border-bottom:3px solid #2563eb;padding-bottom:16px;margin-bottom:24px}';
     h+='.logo{font-size:24px;font-weight:800;color:#2563eb}.period{font-size:18px;font-weight:700;margin-top:4px}';
@@ -1197,7 +1198,7 @@ const Rapportage=({mel,org,users,onNotify})=>{
     h+='td{padding:8px;border-bottom:1px solid #f1f5f9;font-size:11px;vertical-align:top}';
     h+='.footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:10px}';
     h+='@media print{body{padding:16px}}<\/style><\/head><body>';
-    h+='<div class="header"><div><div class="logo">TechMeld<\/div><div class="period">Maandrapport '+mn+'<\/div><div style="color:#64748b;margin-top:4px">'+org.name+'<\/div><\/div>';
+    h+='<div class="header"><div><div class="logo">TechMeld<\/div><div class="period">Maandrapport '+escHtml(mn)+'<\/div><div style="color:#64748b;margin-top:4px">'+escHtml(org.name)+'<\/div><\/div>';
     h+='<div style="text-align:right;color:#64748b"><div>Gegenereerd: '+new Date().toLocaleDateString("nl-BE")+'<\/div><\/div><\/div>';
     h+='<div class="stats">';
     h+='<div class="stat"><div class="stat-num">'+filtered.length+'<\/div><div class="stat-label">Totaal<\/div><\/div>';
@@ -1457,23 +1458,23 @@ const VergelijkendeRapportage=({org,orgId,onNotify})=>{
 
   const genPDF=()=>{
     const mn=months[selMonth]+" "+selYear;
-    var h='<!DOCTYPE html><html><head><title>TechMeld Vergelijkende Rapportage - '+mn;
+    var h='<!DOCTYPE html><html><head><title>TechMeld Vergelijkende Rapportage - '+escHtml(mn);
     h+='</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;padding:24px;color:#1e293b;font-size:11px}';
     h+='table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#1e293b;color:white;text-align:left;padding:8px;font-size:10px}';
     h+='td{padding:8px;border-bottom:1px solid #e2e8f0;font-size:11px}.best{background:#f0fdf4;font-weight:700}';
     h+='@media print{body{padding:12px}}</style></head><body>';
     h+='<div style="border-bottom:3px solid #059669;padding-bottom:12px;margin-bottom:16px"><span style="font-size:22px;font-weight:800;color:#059669">TechMeld</span><span style="font-size:9px;color:#059669;vertical-align:super">™</span>';
-    h+='<div style="font-size:16px;font-weight:700;margin-top:4px">Vergelijkende Rapportage — '+mn+'</div>';
-    h+='<div style="color:#64748b;font-size:11px">'+org.name+' · '+locaties.length+' locaties</div></div>';
+    h+='<div style="font-size:16px;font-weight:700;margin-top:4px">Vergelijkende Rapportage — '+escHtml(mn)+'</div>';
+    h+='<div style="color:#64748b;font-size:11px">'+escHtml(org.name)+' · '+locaties.length+' locaties</div></div>';
     h+='<table><tr><th>Locatie</th><th>Totaal</th><th>Open</th><th>Opgelost</th><th>Kritiek</th><th>Gem. Oplostijd</th><th>Oplospercentage</th><th>Top Categorie</th></tr>';
-    const allStats=locaties.map(loc=>({name:loc.name,...getStats(loc.id)}));
+    const allStats=locaties.map(loc=>({name:escHtml(loc.name),...getStats(loc.id)}));
     const bestResolve=Math.max(...allStats.map(s=>s.resolveRate));
     const bestTime=Math.min(...allStats.filter(s=>s.avgTime>0).map(s=>s.avgTime));
     allStats.forEach(s=>{
       h+='<tr><td><strong>'+s.name+'</strong></td><td>'+s.total+'</td><td>'+s.open+'</td><td>'+s.done+'</td><td style="color:'+(s.crit>0?'#dc2626':'#16a34a')+'">'+s.crit+'</td>';
       h+='<td'+(s.avgTime===bestTime&&s.avgTime>0?' class="best"':'')+'>'+s.avgTime+'u</td>';
       h+='<td'+(s.resolveRate===bestResolve&&s.resolveRate>0?' class="best"':'')+'>'+s.resolveRate+'%</td>';
-      h+='<td>'+s.topCat+'</td></tr>';
+      h+='<td>'+escHtml(s.topCat)+'</td></tr>';
     });
     h+='</table><div style="margin-top:24px;text-align:center;color:#94a3b8;font-size:9px">TechMeld™ Vergelijkende Rapportage · Gegenereerd '+new Date().toLocaleDateString("nl-BE")+'</div></body></html>';
     var w=window.open('','_blank');w.document.write(h);w.document.close();setTimeout(()=>w.print(),300);
