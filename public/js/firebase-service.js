@@ -409,4 +409,3 @@ var DB = {
     await db.collection('organizations').doc(orgId).update({groepId});
   },
 };
-};
