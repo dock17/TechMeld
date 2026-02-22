@@ -6,7 +6,7 @@
   <script>
   // Force service worker update and cache clear on version change
   (function(){
-    var APP_VERSION="20260222h";
+    var APP_VERSION="20260222i";
     var stored=sessionStorage.getItem("tm_v");
     if(stored!==APP_VERSION){
       sessionStorage.setItem("tm_v",APP_VERSION);
@@ -75,12 +75,22 @@ const DEFAULT_PERMS={
   technician:["dashboard","meldingen","new","building","floorplans"],
   reporter:["dashboard","meldingen","new","building"]
 };
-const PLANS=[
+// Default plans (fallback — overridden by Firestore config/plans if available)
+var PLANS=[
   {id:"starter",name:"Starter",price:0,yearPrice:0,users:3,buildings:1,free:true,trial:true,meldingenMax:10,features:["Tot 3 gebruikers","1 gebouw","Max 10 actieve meldingen","E-mail notificaties","Basis rapportage"],color:"#2563eb",pop:false},
   {id:"professional",name:"Professional",price:89,yearPrice:Math.round(89*12*0.85),users:20,buildings:2,free:false,meldingenMax:999,features:["Tot 20 gebruikers","2 gebouwen","Push + E-mail notificaties","Plattegronden uploaden","Uitgebreide rapportage","Prioriteits support","14 dagen gratis proefperiode"],color:"#7c3aed",pop:true},
   {id:"enterprise",name:"Enterprise",price:159,yearPrice:Math.round(159*12*0.85),users:999,buildings:5,free:false,meldingenMax:999,features:["Onbeperkt gebruikers","5 gebouwen","Alle functies","24/7 support","Custom integraties","SLA garantie"],color:"#0891b2",pop:false},
   {id:"groep",name:"Groepslicentie",price:129,yearPrice:Math.round(129*12*0.85),users:999,buildings:999,free:false,meldingenMax:999,perLocatie:true,minLocaties:3,features:["Prijs per locatie","Centraal groepsdashboard","Onbeperkt gebruikers/locatie","Vergelijkende rapportage","Dedicated accountmanager","Volume korting vanaf 5+"],color:"#059669",pop:false,contact:true,volumeKorting:{5:0.10,10:0.15,20:0.20}},
 ];
+// Load plans from Firestore config (override defaults)
+if(firebaseReady){
+  db.collection("config").doc("plans").get().then(function(doc){
+    if(doc.exists&&doc.data().plans){
+      var remote=doc.data().plans;
+      PLANS=PLANS.map(function(p){var r=remote[p.id];return r?Object.assign({},p,r):p});
+    }
+  }).catch(function(){});
+}
 
 const Icon=({name,size=20,color="currentColor"})=>{
   const d={
@@ -129,10 +139,10 @@ const Sel=({label,value,onChange,options})=>(
   <div>{label&&<label style={{fontSize:12,color:C.sub,display:"block",marginBottom:4,fontWeight:600}}>{label}</label>}
   <select value={value} onChange={e=>onChange(e.target.value)} style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+C.border,background:C.card,color:C.text,fontSize:13,outline:"none",cursor:"pointer",boxSizing:"border-box"}}>{options.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select></div>
 );
-const Btn=({children,onClick,v="primary",sm,disabled,sx={}})=>{
+const Btn=({children,onClick,v="primary",sm,disabled,sx={},...rest})=>{
   const s={fontWeight:600,border:"none",cursor:disabled?"not-allowed":"pointer",borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,opacity:disabled?0.5:1,fontSize:sm?12:13,padding:sm?"6px 12px":"9px 18px",transition:"all .15s"};
   const vs={primary:{background:C.accent,color:"#fff"},secondary:{background:"#f1f5f9",color:C.text,border:"1px solid "+C.border},danger:{background:"#fef2f2",color:C.danger},ghost:{background:"transparent",color:C.accent},success:{background:"#f0fdf4",color:C.success}};
-  return <button onClick={onClick} disabled={disabled} style={{...s,...vs[v],...sx}}>{children}</button>;
+  return <button onClick={onClick} disabled={disabled} style={{...s,...vs[v],...sx}} {...rest}>{children}</button>;
 };
 const Tag=({children,c="#2563eb",bg="#eff6ff"})=><span style={{padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:bg,color:c}}>{children}</span>;
 const ReauthModal=({show,title,message,onConfirm,onCancel})=>{
@@ -153,11 +163,11 @@ const ReauthModal=({show,title,message,onConfirm,onCancel})=>{
     }
     setBusy(false);
   };
-  return <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+  return <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} role="dialog" aria-modal="true" aria-labelledby="reauth-title" onKeyDown={e=>{if(e.key==="Escape")onCancel()}}>
     <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:400,width:"100%",boxShadow:"0 8px 30px rgba(0,0,0,.15)"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
         <div style={{width:32,height:32,borderRadius:8,background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="lock" size={18} color="#dc2626"/></div>
-        <div style={{fontSize:16,fontWeight:700,color:"#dc2626"}}>{title||"Herverificatie vereist"}</div>
+        <div id="reauth-title" style={{fontSize:16,fontWeight:700,color:"#dc2626"}}>{title||"Herverificatie vereist"}</div>
       </div>
       <p style={{fontSize:13,color:C.sub,marginBottom:14}}>{message||"Voer uw wachtwoord in om deze actie te bevestigen."}</p>
       <div style={{marginBottom:12}}><Inp label="Wachtwoord" type="password" value={pw} onChange={setPw} placeholder="Uw wachtwoord"/></div>
@@ -173,7 +183,7 @@ const ReauthModal=({show,title,message,onConfirm,onCancel})=>{
 const Toast=({items,onDismiss})=>items.length?<div role="status" aria-live="polite" style={{position:"fixed",top:12,right:12,zIndex:9999,display:"flex",flexDirection:"column",gap:6,maxWidth:340}}>
   {items.map(n=><div key={n.id} style={{background:n.type==="success"?"#f0fdf4":n.type==="error"?"#fef2f2":"#eff6ff",border:"1px solid "+(n.type==="success"?"#bbf7d0":n.type==="error"?"#fecaca":"#bfdbfe"),borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,animation:"slideIn .3s",boxShadow:"0 4px 16px rgba(0,0,0,.06)"}}>
     <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:C.text}}>{n.title}</div>{n.msg&&<div style={{fontSize:11,color:C.sub,marginTop:1}}>{n.msg}</div>}</div>
-    <button onClick={()=>onDismiss(n.id)} style={{background:"none",border:"none",color:C.dim,cursor:"pointer",padding:2}}><Icon name="close" size={14}/></button>
+    <button onClick={()=>onDismiss(n.id)} aria-label="Melding sluiten" style={{background:"none",border:"none",color:C.dim,cursor:"pointer",padding:2}}><Icon name="close" size={14}/></button>
   </div>)}
 </div>:null;
 
@@ -506,7 +516,7 @@ const Pricing=({sub,org,onSelect,onBack,onNotify})=>{
       </div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14,marginBottom:28}}>
-      {PLANS.filter(p=>!p.trial).map(p=>{const mp=billing==="year"?Math.round(p.yearPrice/12):p.price;const sv=billing==="year"?Math.round(p.price*12-p.yearPrice):0;return <div key={p.id} onClick={()=>setSel(p.id)} style={{background:C.card,borderRadius:14,padding:"20px 16px",cursor:"pointer",border:"2px solid "+(sel===p.id?p.color:C.border),boxShadow:sel===p.id?"0 8px 24px "+p.color+"12":"0 1px 4px rgba(0,0,0,.04)",transition:"all .2s",position:"relative"}}>
+      {PLANS.filter(p=>!p.trial).map(p=>{const mp=billing==="year"?Math.round(p.yearPrice/12):p.price;const sv=billing==="year"?Math.round(p.price*12-p.yearPrice):0;return <div key={p.id} onClick={()=>setSel(p.id)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setSel(p.id)}}} tabIndex={0} role="radio" aria-checked={sel===p.id} style={{background:C.card,borderRadius:14,padding:"20px 16px",cursor:"pointer",border:"2px solid "+(sel===p.id?p.color:C.border),boxShadow:sel===p.id?"0 8px 24px "+p.color+"12":"0 1px 4px rgba(0,0,0,.04)",transition:"all .2s",position:"relative"}}>
         {p.pop&&<div style={{position:"absolute",top:-9,right:14,background:p.color,color:"#fff",padding:"3px 10px",borderRadius:16,fontSize:10,fontWeight:700}}>Meest gekozen</div>}
         <div style={{fontSize:11,fontWeight:700,color:p.color,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>{p.name}</div>
         <div style={{marginBottom:14}}>
@@ -545,7 +555,7 @@ const Sidebar=({active,onNav,user,onLogout,sub,impersonating})=>{
       <div style={{fontSize:16,fontWeight:700,color:C.sbText}}>TechMeld<sup style={{fontSize:7,color:"#60a5fa"}}>™</sup></div>
     </div>
     <nav style={{flex:1,padding:"6px"}}>
-      {items.map(it=><button key={it.id} onClick={()=>onNav(it.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:7,border:"none",cursor:"pointer",marginBottom:1,background:active===it.id?"rgba(255,255,255,.08)":"transparent",color:active===it.id?"#fff":C.sbDim,fontSize:13,fontWeight:active===it.id?600:400,textAlign:"left",transition:"all .1s"}}><Icon name={it.ic} size={16} color={active===it.id?"#60a5fa":C.sbDim}/>{it.l}</button>)}
+      {items.map(it=><button key={it.id} onClick={()=>onNav(it.id)} aria-current={active===it.id?"page":undefined} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:7,border:"none",cursor:"pointer",marginBottom:1,background:active===it.id?"rgba(255,255,255,.08)":"transparent",color:active===it.id?"#fff":C.sbDim,fontSize:13,fontWeight:active===it.id?600:400,textAlign:"left",transition:"all .1s"}}><Icon name={it.ic} size={16} color={active===it.id?"#60a5fa":C.sbDim}/>{it.l}</button>)}
     </nav>
     {pl&&!isSA&&<div style={{margin:"0 8px 6px",padding:"6px 10px",background:"rgba(255,255,255,.04)",borderRadius:6,border:"1px solid rgba(255,255,255,.06)",cursor:"pointer"}} onClick={()=>onNav("billing")}>
       <div style={{display:"flex",alignItems:"center",gap:5}}><Icon name={sub.status==="trial"?"time":"crown"} size={12} color={pl.color}/><span style={{fontSize:10,fontWeight:600,color:pl.color}}>{pl.name}{sub.status==="trial"?" — proefperiode actief":""}</span></div>
@@ -570,7 +580,7 @@ const MobileNav=({active,onNav,user,onLogout,sub,impersonating})=>{
   const isGroep=sub?.plan==="groep";
   const items=(isSA&&impersonating)?[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}]:[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}].filter(function(it){return it.id==="menu"||userPerms.includes(it.id)});
   var menuItems=(isSA&&impersonating)?[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"},{id:"admin",ic:"shield",l:"⚡ Admin"}]):[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(isSA?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
-  return <><nav className="mobile-nav" role="navigation" aria-label="Mobiele navigatie">{items.map(it=><button key={it.id} aria-label={it.l} onClick={function(){if(it.id==="menu")setShowMenu(!showMenu);else{setShowMenu(false);onNav(it.id)}}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"5px 2px",border:"none",cursor:"pointer",borderRadius:6,background:"transparent",color:(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}}>
+  return <><nav className="mobile-nav" role="navigation" aria-label="Mobiele navigatie">{items.map(it=><button key={it.id} aria-label={it.l} aria-expanded={it.id==="menu"?showMenu:undefined} aria-current={active===it.id?"page":undefined} onClick={function(){if(it.id==="menu")setShowMenu(!showMenu);else{setShowMenu(false);onNav(it.id)}}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"5px 2px",border:"none",cursor:"pointer",borderRadius:6,background:"transparent",color:(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}}>
     {it.id==="new"?<div style={{width:38,height:38,borderRadius:19,marginTop:-16,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(37,99,235,.3)"}}><Icon name="plus" size={22} color="white"/></div>:<Icon name={it.ic} size={18} color={(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}/>}
     <span style={{fontSize:9,fontWeight:(active===it.id||(it.id==="menu"&&showMenu))?600:400}}>{it.l}</span>
   </button>)}</nav>
@@ -614,7 +624,7 @@ const Dashboard=({mel,org,onNav,sub,onUp,curUser,orgId})=>{
         <h3 style={{fontSize:14,fontWeight:700,margin:0}}>Recente Meldingen</h3>
         <button onClick={()=>onNav("meldingen")} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:12,fontWeight:600}}>Alles →</button>
       </div>
-      {rec.map(m=>{const room=org.rooms.find(r=>r.id===m.rId);return <div key={m.id} onClick={()=>onNav("detail",m.id)} style={{padding:"10px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10,cursor:"pointer",transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=C.cardHover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+      {rec.map(m=>{const room=org.rooms.find(r=>r.id===m.rId);return <div key={m.id} onClick={()=>onNav("detail",m.id)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onNav("detail",m.id)}}} tabIndex={0} role="button" style={{padding:"10px 16px",borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:10,cursor:"pointer",transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=C.cardHover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
         <div style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:PRIORITY[m.prio]?.c}}/>
         <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.title}</div><div style={{fontSize:11,color:C.dim,marginTop:1}}>{room?.name}</div></div>
         <Tag c={STATUS[m.status]?.c} bg={STATUS[m.status]?.b}>{STATUS[m.status]?.l}</Tag>
@@ -646,15 +656,15 @@ const MeldingenList=({mel,org,onNav,sub,cur,orgId,onNotify})=>{
       <Btn onClick={()=>onNav("new")}>+ Nieuw</Btn>
     </div>
     <div style={{marginBottom:14,display:"flex",flexDirection:"column",gap:8}}>
-      <div style={{position:"relative"}}><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Zoeken..." style={{width:"100%",padding:"9px 12px 9px 34px",borderRadius:8,border:"1px solid "+C.border,background:C.card,color:C.text,fontSize:13,outline:"none",boxSizing:"border-box"}}/><div style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)"}}><Icon name="search" size={14} color={C.dim}/></div></div>
-      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{[["all","Alle"],["open","Open"],["in_progress","In Behandeling"],["resolved","Opgelost"]].map(([k,l])=><Btn key={k} onClick={()=>setFs(k)} v={fs===k?"primary":"secondary"} sm>{l}</Btn>)}</div>
+      <div style={{position:"relative"}}><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Zoeken..." aria-label="Zoeken in meldingen" style={{width:"100%",padding:"9px 12px 9px 34px",borderRadius:8,border:"1px solid "+C.border,background:C.card,color:C.text,fontSize:13,outline:"none",boxSizing:"border-box"}}/><div style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)"}}><Icon name="search" size={14} color={C.dim}/></div></div>
+      <div role="group" aria-label="Filter op status" style={{display:"flex",gap:5,flexWrap:"wrap"}}>{[["all","Alle"],["open","Open"],["in_progress","In Behandeling"],["resolved","Opgelost"]].map(([k,l])=><Btn key={k} onClick={()=>setFs(k)} v={fs===k?"primary":"secondary"} sm aria-pressed={fs===k}>{l}</Btn>)}</div>
     </div>
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
-      {list.map(m=>{const room=org.rooms.find(r=>r.id===m.rId);const fl=org.floors.find(f=>f.id===m.fId);const bld=(org.buildings||[]).find(b=>b.id===(m.bId||(fl&&fl.bId)));return <div key={m.id} onClick={()=>onNav("detail",m.id)} style={{background:C.card,borderRadius:10,padding:"12px 14px",border:"1px solid "+C.border,cursor:"pointer",display:"flex",alignItems:"center",gap:10,borderLeft:"3px solid "+PRIORITY[m.prio]?.c,transition:"all .1s",boxShadow:"0 1px 2px rgba(0,0,0,.02)"}} onMouseEnter={e=>e.currentTarget.style.background=C.cardHover} onMouseLeave={e=>e.currentTarget.style.background=C.card}>
+      {list.map(m=>{const room=org.rooms.find(r=>r.id===m.rId);const fl=org.floors.find(f=>f.id===m.fId);const bld=(org.buildings||[]).find(b=>b.id===(m.bId||(fl&&fl.bId)));return <div key={m.id} onClick={()=>onNav("detail",m.id)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onNav("detail",m.id)}}} tabIndex={0} role="button" aria-label={m.title+" — "+PRIORITY[m.prio]?.l+", "+STATUS[m.status]?.l} style={{background:C.card,borderRadius:10,padding:"12px 14px",border:"1px solid "+C.border,cursor:"pointer",display:"flex",alignItems:"center",gap:10,borderLeft:"3px solid "+PRIORITY[m.prio]?.c,transition:"all .1s",boxShadow:"0 1px 2px rgba(0,0,0,.02)"}} onMouseEnter={e=>e.currentTarget.style.background=C.cardHover} onMouseLeave={e=>e.currentTarget.style.background=C.card}>
         <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600}}>{m.title}</div><div style={{fontSize:11,color:C.dim,marginTop:1}}>📍 {bld&&(org.buildings||[]).length>1?bld.name+" · ":""}{room?.name} · {m.cat} {m.comments.length>0&&`· 💬 ${m.comments.length}`}</div></div>
         <Tag c={PRIORITY[m.prio]?.c} bg={PRIORITY[m.prio]?.b}>{PRIORITY[m.prio]?.l}</Tag>
         <Tag c={STATUS[m.status]?.c} bg={STATUS[m.status]?.b}>{STATUS[m.status]?.l}</Tag>
-        {cur?.role==="admin"&&<button onClick={e=>doDelete(e,m)} disabled={deleting===m.id} style={{background:"none",border:"1px solid #fecaca",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,color:"#dc2626",flexShrink:0}} title="Verwijderen">{deleting===m.id?"...":"🗑"}</button>}
+        {cur?.role==="admin"&&<button onClick={e=>doDelete(e,m)} disabled={deleting===m.id} aria-label={"Verwijder melding: "+m.title} style={{background:"none",border:"1px solid #fecaca",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,color:"#dc2626",flexShrink:0}} title="Verwijderen">{deleting===m.id?"...":"🗑"}</button>}
       </div>})}
       {!list.length&&<div style={{textAlign:"center",padding:40,color:C.dim}}>📋 Geen meldingen</div>}
     </div>
@@ -674,9 +684,9 @@ const Detail=({mel,org,users,cur,onBack,onUpdate,onNotify})=>{
     if(s==="in_progress"&&!mel.to)update.to=cur.id;
     onUpdate(update);onNotify({title:labels[s]||"Status gewijzigd",type:"success"});
   };
-  return <>{lightbox&&<div onClick={function(){setLightbox(null)}} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20,cursor:"zoom-out"}}>
-    <img src={safeUrl(lightbox)} style={{maxWidth:"95vw",maxHeight:"90vh",borderRadius:8,objectFit:"contain",boxShadow:"0 8px 40px rgba(0,0,0,.5)"}}/>
-    <button onClick={function(e){e.stopPropagation();setLightbox(null)}} style={{position:"absolute",top:16,right:16,width:40,height:40,borderRadius:20,background:"rgba(255,255,255,.2)",border:"none",cursor:"pointer",fontSize:20,color:"white"}}>✕</button>
+  return <>{lightbox&&<div onClick={function(){setLightbox(null)}} onKeyDown={function(e){if(e.key==="Escape")setLightbox(null)}} role="dialog" aria-modal="true" aria-label="Afbeelding vergroting" tabIndex={-1} ref={function(el){if(el)el.focus()}} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20,cursor:"zoom-out",outline:"none"}}>
+    <img src={safeUrl(lightbox)} alt="Vergrote afbeelding" style={{maxWidth:"95vw",maxHeight:"90vh",borderRadius:8,objectFit:"contain",boxShadow:"0 8px 40px rgba(0,0,0,.5)"}}/>
+    <button onClick={function(e){e.stopPropagation();setLightbox(null)}} aria-label="Sluiten" style={{position:"absolute",top:16,right:16,width:40,height:40,borderRadius:20,background:"rgba(255,255,255,.2)",border:"none",cursor:"pointer",fontSize:20,color:"white"}}>✕</button>
   </div>}
   <div style={{padding:"20px 16px",maxWidth:780}}>
     <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,fontWeight:600,marginBottom:14,padding:0}}><Icon name="back" size={16} color={C.accent}/> Terug</button>
@@ -779,7 +789,7 @@ const NewMeld=({org,users,cur,onSubmit,onNav,onNotify,sub})=>{
         {photos.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
           {photos.map(p=><div key={p.id} style={{position:"relative",width:72,height:72,borderRadius:8,overflow:"hidden",border:"1px solid "+C.border}}>
             <img src={safeUrl(p.url)} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-            <button onClick={()=>rmPhoto(p.id)} style={{position:"absolute",top:2,right:2,width:20,height:20,borderRadius:10,background:"rgba(0,0,0,.6)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="close" size={10} color="white"/></button>
+            <button onClick={()=>rmPhoto(p.id)} aria-label="Foto verwijderen" style={{position:"absolute",top:2,right:2,width:20,height:20,borderRadius:10,background:"rgba(0,0,0,.6)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="close" size={10} color="white"/></button>
           </div>)}
         </div>}
         {photos.length<maxPhotos&&<div onClick={()=>fileRef.current?.click()} style={{border:"2px dashed "+C.border,borderRadius:8,padding:"16px",textAlign:"center",cursor:"pointer",transition:"border-color .15s"}} onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}><Icon name="photo" size={22} color={C.dim}/><div style={{fontSize:12,color:C.sub,marginTop:4}}>Klik om foto's toe te voegen</div><div style={{fontSize:10,color:C.dim,marginTop:2}}>JPG, PNG · Max 10MB per foto</div></div>}
@@ -1155,8 +1165,8 @@ const Building=({org,onUpd,onNotify,sub,role})=>{
     {/* Building tabs */}
     <div style={{display:"flex",gap:4,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
       {buildings.map(b=><div key={b.id} style={{display:"flex",alignItems:"center",gap:0}}>
-        <button onClick={()=>setSelB(b.id)} style={{padding:"7px 14px",borderRadius:editB===b.id?"8px 0 0 8px":"8px",border:"1px solid "+(selB===b.id?C.accent:C.border),borderRight:editB===b.id?"none":undefined,background:selB===b.id?C.accentBg:C.card,color:selB===b.id?C.accent:C.sub,fontSize:13,fontWeight:selB===b.id?700:500,cursor:"pointer",transition:"all .15s",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><Icon name="building" size={13} color={selB===b.id?C.accent:C.dim}/> {b.name}</button>
-        {canEdit&&selB===b.id&&editB!==b.id&&<button onClick={()=>{setEditB(b.id);setEditBName(b.name)}} style={{padding:"7px 6px",border:"1px solid "+C.accent,borderLeft:"none",borderRadius:"0 8px 8px 0",background:C.accentBg,cursor:"pointer",display:"flex",alignItems:"center"}}><Icon name="edit" size={11} color={C.accent}/></button>}
+        <button onClick={()=>setSelB(b.id)} aria-pressed={selB===b.id} style={{padding:"7px 14px",borderRadius:editB===b.id?"8px 0 0 8px":"8px",border:"1px solid "+(selB===b.id?C.accent:C.border),borderRight:editB===b.id?"none":undefined,background:selB===b.id?C.accentBg:C.card,color:selB===b.id?C.accent:C.sub,fontSize:13,fontWeight:selB===b.id?700:500,cursor:"pointer",transition:"all .15s",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><Icon name="building" size={13} color={selB===b.id?C.accent:C.dim}/> {b.name}</button>
+        {canEdit&&selB===b.id&&editB!==b.id&&<button onClick={()=>{setEditB(b.id);setEditBName(b.name)}} aria-label={"Bewerk "+b.name} style={{padding:"7px 6px",border:"1px solid "+C.accent,borderLeft:"none",borderRadius:"0 8px 8px 0",background:C.accentBg,cursor:"pointer",display:"flex",alignItems:"center"}}><Icon name="edit" size={11} color={C.accent}/></button>}
       </div>)}
     </div>
     {/* Edit building name */}

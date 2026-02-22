@@ -335,12 +335,27 @@ exports.eraseMyData = onCall({region:"europe-west1",maxInstances:5}, async(req)=
 // ═══════════════════════════════════════════
 // SUBSCRIPTION ACTIVATION (server-side only)
 // ═══════════════════════════════════════════
-const PLANS_SERVER = {
+const PLANS_FALLBACK = {
   starter: { name:"Starter", price:0, yearPrice:0 },
   professional: { name:"Professional", price:89, yearPrice:Math.round(89*12*0.85) },
   enterprise: { name:"Enterprise", price:159, yearPrice:Math.round(159*12*0.85) },
   groep: { name:"Groepslicentie", price:129, yearPrice:Math.round(129*12*0.85) },
 };
+let _plansCache = null;
+let _plansCacheTime = 0;
+async function getPlans() {
+  const now = Date.now();
+  if (_plansCache && (now - _plansCacheTime) < 300000) return _plansCache; // 5 min cache
+  try {
+    const doc = await db.collection("config").doc("plans").get();
+    if (doc.exists && doc.data().plans) {
+      _plansCache = doc.data().plans;
+      _plansCacheTime = now;
+      return _plansCache;
+    }
+  } catch (e) { console.warn("Plans config read failed, using fallback:", e.message); }
+  return PLANS_FALLBACK;
+}
 
 // ═══════════════════════════════════════════
 // PAYPAL ORDERS API v2
@@ -372,7 +387,7 @@ exports.createPayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIEN
   if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
   const{planId,billing}=req.data;
   if(!planId||!billing) throw new HttpsError("invalid-argument","planId en billing zijn vereist");
-  const planInfo=PLANS_SERVER[planId];
+  const planInfo=(await getPlans())[planId];
   if(!planInfo) throw new HttpsError("invalid-argument","Ongeldig plan: "+planId);
   if(!["month","year"].includes(billing)) throw new HttpsError("invalid-argument","Ongeldige billing periode");
   if(planInfo.price===0) throw new HttpsError("invalid-argument","Starter plan vereist geen betaling");
@@ -468,7 +483,7 @@ exports.capturePayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIE
   }
   // Activate subscription
   const orgId=orderData.orgId;
-  const planInfo=PLANS_SERVER[orderData.planId];
+  const planInfo=(await getPlans())[orderData.planId];
   const now=new Date();
   const expiresAt=new Date(now);
   if(orderData.billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
@@ -529,7 +544,7 @@ exports.activateSubscription = onCall({region:"europe-west1",maxInstances:5}, as
   await requireSuperAdmin(req.auth);
   const{planId,method,billing}=req.data;
   if(!planId||!method||!billing) throw new HttpsError("invalid-argument","planId, method en billing zijn vereist");
-  const planInfo=PLANS_SERVER[planId];
+  const planInfo=(await getPlans())[planId];
   if(!planInfo) throw new HttpsError("invalid-argument","Ongeldig plan: "+planId);
   if(!["month","year"].includes(billing)) throw new HttpsError("invalid-argument","Ongeldige billing periode");
   if(method!=="bank") throw new HttpsError("invalid-argument","Gebruik PayPal checkout voor PayPal-betalingen");

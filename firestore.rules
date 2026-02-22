@@ -240,7 +240,9 @@ service cloud.firestore {
     // CONFIG (super admin list, etc.)
     // ════════════════════════════════════════════
     match /config/{docId} {
-      allow read: if isAuth() && isSuperAdmin();
+      // plans: readable by all authenticated users (pricing info)
+      // superadmins, other config: super admin only
+      allow read: if isAuth() && (docId == "plans" || isSuperAdmin());
       allow write: if false; // Solo via Cloud Functions o Console
     }
 
