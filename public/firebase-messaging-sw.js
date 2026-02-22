@@ -29,8 +29,8 @@ messaging.onBackgroundMessage(function(payload) {
 });
 
 // Cache management
-var CACHE_NAME = 'techmeld-v7';
-var ASSETS = ['/manifest.json'];
+var CACHE_NAME = 'techmeld-v8';
+var ASSETS = ['/manifest.json', '/offline.html'];
 
 self.addEventListener('install', function(e) {
   // Clear ALL old caches on install
@@ -57,7 +57,7 @@ self.addEventListener('fetch', function(e) {
   // NEVER cache HTML — always fetch from network, bypass HTTP cache
   if (e.request.mode === 'navigate' || e.request.url.endsWith('.html')) {
     e.respondWith(
-      fetch(e.request, { cache: 'no-store' }).catch(function() { return caches.match(e.request); })
+      fetch(e.request, { cache: 'no-store' }).catch(function() { return caches.match('/offline.html'); })
     );
     return;
   }

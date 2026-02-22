@@ -51,438 +51,13 @@
   <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-storage-compat.js" crossorigin="anonymous"></script>
   <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-messaging-compat.js" crossorigin="anonymous"></script>
   <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-functions-compat.js" crossorigin="anonymous"></script>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    html,body,#root{height:100%;width:100%;margin:0}
-    body{background:#f8fafc;font-family:'Inter',system-ui,sans-serif;color:#1e293b;-webkit-font-smoothing:antialiased}
-    .app-shell{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
-    ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
-    input::placeholder,textarea::placeholder{color:#94a3b8}
-    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
-    @keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-    .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:#fff;border-top:1px solid #e2e8f0;padding:4px 8px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
-    @media(max-width:768px){.mobile-nav{display:flex}.desktop-sidebar{display:none!important}.main-content{padding-bottom:68px!important}}
-    @media print{body::before{content:"© 2026 TechMeld™ — Vertrouwelijk";display:block;padding:8px;font-size:10px;text-align:center;color:#999;border-bottom:1px solid #e5e7eb}}
-    .grecaptcha-badge{visibility:hidden!important}
-  </style>
+  <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <div id="root"></div>
-<script>
-(function(){console.log('%c© TechMeld™ — Alle rechten voorbehouden','color:#2563eb;font-size:14px;font-weight:bold');console.log('%cBeschermd door Belgisch Auteursrecht & EU-richtlijn 2009/24/EG.','color:#64748b;font-size:11px')})();
-if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(()=>{})})}
-let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;window.dispatchEvent(new CustomEvent('pwa-installable'))});
-
-// ═══════════════════════════════════════════
-// FIREBASE CONFIG & INITIALIZATION
-// ═══════════════════════════════════════════
-// ⚠️ VUL HIER JE EIGEN FIREBASE CONFIG IN
-// Ga naar Firebase Console > Project Settings > General > Your apps > Config
-const firebaseConfig = {
-  apiKey: "AIzaSyDGgQBiHQVa8z8khvrIKp392mc_d8dDEJU",
-  authDomain: "techmeld.firebaseapp.com",
-  projectId: "techmeld",
-  storageBucket: "techmeld.firebasestorage.app",
-  messagingSenderId: "460267327070",
-  appId: "1:460267327070:web:8772a5e513bf912bb22ecf",
-  measurementId: "G-W17MQFNPK3"
-};
-
-// Initialize Firebase
-let fb = null, auth = null, db = null, storage = null, messaging = null, functions = null;
-let firebaseReady = false;
-const VAPID_KEY = "BHPoEmgQs-YqKYBYlXsTWS_zAjpvJ8PBdsjowoU77STg9d5ExdDXG5-3TvVnAjQhRp_xgD40vx7XX92L3rXRxDk";
-try {
-  fb = firebase.initializeApp(firebaseConfig);
-  auth = firebase.auth();
-  db = firebase.firestore();
-  storage = firebase.storage();
-  // Initialize FCM
-  if('Notification' in window && firebase.messaging.isSupported()){
-    messaging = firebase.messaging();
-  }
-  // Enable offline persistence
-  db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
-  // Initialize Cloud Functions (europe-west1)
-  functions = firebase.app().functions("europe-west1");
-  firebaseReady = firebaseConfig.apiKey && firebaseConfig.apiKey !== "JOUW_API_KEY";
-  if(!firebaseReady) console.warn("⚠️ Firebase config niet ingevuld — app werkt in demo-modus. Vul je Firebase config in om data op te slaan.");
-} catch(e) {
-  console.warn("Firebase init error:", e);
-}
-
-// ═══════════════════════════════════════════
-// FIREBASE DATABASE SERVICE
-// ═══════════════════════════════════════════
-// ═══════════════════════════════════════════
-// PUSH NOTIFICATIONS (FCM + Browser)
-// ═══════════════════════════════════════════
-const PushNotify={
-  supported:'Notification' in window,
-  token:null,
-  _userId:null,
-  _orgId:null,
-  knownIds:new Set(),
-  get permission(){return this.supported?Notification.permission:'denied'},
-  async requestPermission(){
-    if(!this.supported)return false;
-    var result=await Notification.requestPermission();
-    return result==='granted';
-  },
-  async getFCMToken(){
-    if(!messaging)return null;
-    try{
-      var reg=await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js')||await navigator.serviceWorker.ready;
-      var token=await messaging.getToken({vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
-      this.token=token;
-      return token;
-    }catch(e){console.warn('FCM token error:',e);return null}
-  },
-  async registerAndSave(userId,orgId){
-    this._userId=userId;
-    this._orgId=orgId;
-    var granted=await this.requestPermission();
-    if(!granted)return null;
-    var token=await this.getFCMToken();
-    if(token){
-      await DB.saveFCMToken(userId,orgId,token);
-      console.log('FCM token saved');
-    }
-    // Listen for token refresh
-    if(messaging){
-      var self=this;
-      messaging.onMessage(function(payload){
-        var d=payload.notification||payload.data||{};
-        self.show(d.title||'TechMeld',d.body||'Nieuwe melding',d.tag||'tm-fg-'+Date.now());
-      });
-    }
-    return token;
-  },
-  async refreshToken(){
-    if(!this._userId||!this._orgId||this.permission!=='granted')return;
-    var token=await this.getFCMToken();
-    if(token){await DB.saveFCMToken(this._userId,this._orgId,token)}
-  },
-  show(title,body,tag){
-    if(this.permission!=='granted')return;
-    if(navigator.serviceWorker&&navigator.serviceWorker.controller){
-      navigator.serviceWorker.ready.then(function(reg){
-        reg.showNotification(title,{body:body,icon:'/favicon.ico',badge:'/favicon.ico',tag:tag||'techmeld-'+Date.now(),vibrate:[200,100,200],data:{url:'/'}});
-      });
-    }else{
-      new Notification(title,{body:body,icon:'/favicon.ico',tag:tag||'techmeld'});
-    }
-  },
-  initKnownIds(meldingen){
-    this.knownIds=new Set(meldingen.map(function(m){return m.id}));
-  },
-  checkNew(meldingen,curUserId){
-    var self=this;
-    if(this.knownIds.size===0){this.initKnownIds(meldingen);return}
-    meldingen.forEach(function(m){
-      if(!self.knownIds.has(m.id)&&m.by!==curUserId){
-        self.show('🔔 Nieuwe melding: '+m.title,(m.desc||'').substring(0,80),'mel-'+m.id);
-      }
-    });
-    this.knownIds=new Set(meldingen.map(function(m){return m.id}));
-  }
-};
-
-const sanitize=(obj)=>{
-  if(!obj||typeof obj!=='object')return obj;
-  if(obj.toDate&&typeof obj.toDate==='function')return obj.toDate().toISOString();
-  if(Array.isArray(obj))return obj.map(sanitize);
-  const out={};for(const k of Object.keys(obj))out[k]=sanitize(obj[k]);return out;
-};
-const escHtml=(s)=>s?String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"):"";
-const safeUrl=(url)=>{if(!url||typeof url!=="string")return"";try{const u=new URL(url);return["https:","http:","data:"].includes(u.protocol)?url:""}catch(e){return""}};
-const _FieldValue = firebase.firestore.FieldValue;
-const _Timestamp = firebase.firestore.Timestamp;
-const _serverTimestamp = () => _FieldValue.serverTimestamp();
-const _fromDate = (d) => _Timestamp.fromDate(d);
-const _call = async (name, data) => {
-  if (!functions) throw new Error("Cloud Functions niet beschikbaar");
-  return await functions.httpsCallable(name)(data || {});
-};
-const DB = {
-  serverTimestamp: _serverTimestamp,
-  fromDate: _fromDate,
-  call: _call,
-  // AUTH
-  async register(email, password, name, orgName, orgType) {
-    if(!firebaseReady) return {uid:"demo-"+Date.now(), email, displayName:name};
-    const cred = await auth.createUserWithEmailAndPassword(email, password);
-    await cred.user.updateProfile({displayName: name});
-    // Super admin — no org, no trial (profile created server-side)
-    try{
-      await _call('createSuperAdminProfile', {name});
-      return cred.user;
-    }catch(e){
-      // Not a super admin — continue with normal registration
-    }
-    // Create organization doc
-    const orgRef = db.collection('organizations').doc();
-    // Seed rooms based on organization type
-    const roomsByType = {
-      care: [
-        {id:"r1",name:"Kamer 101",fId:"f1",type:"bedroom"},
-        {id:"r2",name:"Kamer 102",fId:"f1",type:"bedroom"},
-        {id:"r3",name:"Gemeenschapsruimte",fId:"f2",type:"common"},
-        {id:"r4",name:"Badkamer",fId:"f2",type:"bathroom"},
-        {id:"r5",name:"Berging",fId:"f3",type:"storage"},
-        {id:"r6",name:"Technische Ruimte",fId:"f3",type:"technical"},
-      ],
-      hospital: [
-        {id:"r1",name:"Kamer 101",fId:"f1",type:"bedroom"},
-        {id:"r2",name:"Kamer 102",fId:"f1",type:"bedroom"},
-        {id:"r3",name:"Wachtzaal",fId:"f2",type:"common"},
-        {id:"r4",name:"Operatiezaal",fId:"f2",type:"medical"},
-        {id:"r5",name:"Berging",fId:"f3",type:"storage"},
-        {id:"r6",name:"Technische Ruimte",fId:"f3",type:"technical"},
-      ],
-      hotel: [
-        {id:"r1",name:"Kamer 101",fId:"f1",type:"bedroom"},
-        {id:"r2",name:"Kamer 102",fId:"f1",type:"bedroom"},
-        {id:"r3",name:"Lobby",fId:"f2",type:"common"},
-        {id:"r4",name:"Restaurant",fId:"f2",type:"dining"},
-        {id:"r5",name:"Berging",fId:"f3",type:"storage"},
-        {id:"r6",name:"Technische Ruimte",fId:"f3",type:"technical"},
-      ],
-    };
-    const orgData = {
-      name: orgName, type: orgType,
-      ownerId: cred.user.uid,
-      buildings: [{id:"b1", name:"Hoofdgebouw"}],
-      floors: [
-        {id:"f1",name:"Begane Grond",nr:0,bId:"b1"},
-        {id:"f2",name:"1e Verdieping",nr:1,bId:"b1"},
-        {id:"f3",name:"2e Verdieping",nr:2,bId:"b1"},
-      ],
-      rooms: roomsByType[orgType] || roomsByType.care,
-      createdAt: _serverTimestamp(),
-    };
-    await orgRef.set(orgData);
-    // Create user profile doc FIRST (required by Firestore rules for isMemberOf check)
-    await db.collection('users').doc(cred.user.uid).set({
-      name, email, role:"admin", orgId: orgRef.id,
-      avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
-      createdAt: _serverTimestamp(),
-    });
-    // Create seed meldingen (user profile must exist before this for security rules)
-    const meldingenRef = db.collection('organizations').doc(orgRef.id).collection('meldingen');
-    const now = new Date();
-    await Promise.all([
-      meldingenRef.add({
-        title:"Lekkende kraan — Kamer 101", desc:"Kraan in kamer 101 lekt continu.",
-        status:"open", prio:"medium", cat:"Sanitair",
-        room:"r1", floor:"f1", building:"b1",
-        by: cred.user.uid, to: null,
-        createdAt: _fromDate(now),
-      }),
-      meldingenRef.add({
-        title:"Verlichting flikkert", desc:"Verlichting in de gang flikkert onregelmatig.",
-        status:"in_progress", prio:"high", cat:"Elektriciteit",
-        room:"r3", floor:"f2", building:"b1",
-        by: cred.user.uid, to: null,
-        createdAt: _fromDate(new Date(now.getTime() - 86400000)),
-      }),
-      meldingenRef.add({
-        title:"Deur sluit niet goed", desc:"Deur van berging sluit niet goed meer.",
-        status:"resolved", prio:"low", cat:"Deur/Raam",
-        room:"r5", floor:"f3", building:"b1",
-        by: cred.user.uid, to: null,
-        createdAt: _fromDate(new Date(now.getTime() - 172800000)),
-      }),
-    ]);
-    // Create subscription — Starter 14-day trial
-    const trialEnd = new Date();
-    trialEnd.setDate(trialEnd.getDate() + 14);
-    await db.collection('subscriptions').doc(orgRef.id).set({
-      plan:"starter", status:"trial",
-      trialEnd: _fromDate(trialEnd),
-      orgId: orgRef.id,
-      createdAt: _serverTimestamp(),
-    });
-    // Save trial history for anti-abuse
-    const emailKey = email.toLowerCase().replace(/[.#$/\[\]]/g,'_');
-    await db.collection('trialHistory').doc(emailKey).set({
-      email: email.toLowerCase(),
-      orgName: orgName,
-      orgId: orgRef.id,
-      registeredAt: _serverTimestamp(),
-      expireAt: _fromDate(new Date(Date.now()+365*24*60*60*1000))
-    });
-    return cred.user;
-  },
-
-  async login(email, password) {
-    if(!firebaseReady) return {uid:"demo-"+Date.now(), email, displayName:"Demo"};
-    const cred = await auth.signInWithEmailAndPassword(email, password);
-    return cred.user;
-  },
-
-  async logout() {
-    if(!firebaseReady) return;
-    try{
-      const u=auth.currentUser;
-      if(u){const ts=await db.collection('fcmTokens').where('userId','==',u.uid).get();ts.forEach(function(d){d.ref.delete()})}
-    }catch(e){}
-    await auth.signOut();
-  },
-
-  async saveFCMToken(userId,orgId,token){
-    if(!firebaseReady||!token)return;
-    var id=userId+"_"+btoa(token).slice(0,8);
-    await db.collection('fcmTokens').doc(id).set({userId:userId,orgId:orgId,token:token,device:/Mobi|Android/i.test(navigator.userAgent)?"mobile":"desktop",updatedAt:_serverTimestamp()},{merge:true});
-  },
-
-  async getOrgFCMTokens(orgId,excludeUserId){
-    if(!firebaseReady)return[];
-    var snap=await db.collection('fcmTokens').where('orgId','==',orgId).get();
-    return snap.docs.map(function(d){return d.data()}).filter(function(t){return t.userId!==excludeUserId});
-  },
-
-  // MELDINGEN
-  async addMelding(orgId, melding) {
-    if(!firebaseReady) return melding;
-    const ref = db.collection('organizations').doc(orgId).collection('meldingen').doc();
-    const data = {...melding, id: ref.id, createdAt: _serverTimestamp(), updatedAt: _serverTimestamp()};
-    await ref.set(data);
-    return {...melding, id: ref.id};
-  },
-
-  async updateMelding(orgId, melding) {
-    if(!firebaseReady) return;
-    await db.collection('organizations').doc(orgId).collection('meldingen').doc(melding.id).update({
-      ...melding, updatedAt: _serverTimestamp()
-    });
-  },
-
-  async deleteMelding(orgId, meldingId) {
-    if(!firebaseReady) return;
-    await db.collection('organizations').doc(orgId).collection('meldingen').doc(meldingId).delete();
-  },
-
-  // ORGANIZATION
-  async updateOrg(orgId, data) {
-    if(!firebaseReady) return;
-    await db.collection('organizations').doc(orgId).update(data);
-  },
-
-  // USERS
-  async addUser(orgId, userData) {
-    if(!firebaseReady) return userData;
-    const ref = db.collection('users').doc();
-    await ref.set({...userData, orgId, createdAt: _serverTimestamp()});
-    return {...userData, id: ref.id};
-  },
-
-  async updateUser(userId, data) {
-    if(!firebaseReady) return;
-    await db.collection('users').doc(userId).update(data);
-  },
-
-  async deleteUser(userId) {
-    if(!firebaseReady) return;
-    await db.collection('users').doc(userId).delete();
-  },
-
-  // SUBSCRIPTION
-  async updateSubscription(orgId, data) {
-    if(!firebaseReady) return;
-    await db.collection('subscriptions').doc(orgId).update({
-      ...data, updatedAt: _serverTimestamp()
-    });
-  },
-
-  // INVOICES
-  async addInvoice(orgId, invoice) {
-    if(!firebaseReady) return invoice;
-    const ref = db.collection('organizations').doc(orgId).collection('invoices').doc();
-    await ref.set({...invoice, createdAt: _serverTimestamp()});
-    return {...invoice, id: ref.id};
-  },
-
-  // REAL-TIME LISTENERS
-  listenMeldingen(orgId, callback) {
-    if(!firebaseReady) return ()=>{};
-    return db.collection('organizations').doc(orgId).collection('meldingen')
-      .orderBy('createdAt','desc')
-      .onSnapshot(snap => {
-        const meldingen = snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
-        callback(meldingen);
-      });
-  },
-
-  listenUsers(orgId, callback) {
-    if(!firebaseReady) return ()=>{};
-    return db.collection('users').where('orgId','==',orgId)
-      .onSnapshot(snap => {
-        const users = snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
-        callback(users);
-      });
-  },
-
-  listenOrg(orgId, callback) {
-    if(!firebaseReady) return ()=>{};
-    return db.collection('organizations').doc(orgId)
-      .onSnapshot(doc => {
-        if(doc.exists) callback(sanitize({id:doc.id, ...doc.data()}));
-      });
-  },
-
-  listenSubscription(orgId, callback) {
-    if(!firebaseReady) return ()=>{};
-    return db.collection('subscriptions').doc(orgId)
-      .onSnapshot(doc => {
-        if(doc.exists) callback(sanitize(doc.data()));
-      });
-  },
-
-  // Get user profile
-  async getUserProfile(uid) {
-    if(!firebaseReady) return null;
-    const doc = await db.collection('users').doc(uid).get();
-    return doc.exists ? sanitize({id:doc.id, ...doc.data()}) : null;
-  },
-
-  // GROEPSLICENTIE
-  async getGroepLocaties(groepId) {
-    if(!firebaseReady) return [];
-    const snap = await db.collection('organizations').where('groepId','==',groepId).get();
-    return snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
-  },
-  async getLocatieMeldingen(orgId) {
-    if(!firebaseReady) return [];
-    const snap = await db.collection('organizations').doc(orgId).collection('meldingen').orderBy('createdAt','desc').get();
-    return snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
-  },
-  async getLocatieUsers(orgId) {
-    if(!firebaseReady) return [];
-    const snap = await db.collection('users').where('orgId','==',orgId).get();
-    return snap.docs.map(d => sanitize({id:d.id, ...d.data()}));
-  },
-  async addLocatie(groepId, name, type) {
-    if(!firebaseReady) return null;
-    const ref = db.collection('organizations').doc();
-    await ref.set({
-      name, type: type||"care", groepId,
-      buildings:[{id:"b1",name:"Hoofdgebouw"}],
-      floors:[{id:"f1",name:"Begane Grond",nr:0,bId:"b1"}],
-      rooms:[],
-      createdAt: _serverTimestamp(),
-    });
-    return {id:ref.id, name, type, groepId};
-  },
-  async setGroepId(orgId, groepId) {
-    if(!firebaseReady) return;
-    await db.collection('organizations').doc(orgId).update({groepId});
-  },
-};
-</script>
+<script src="/js/firebase-service.js"></script>
 <script type="text/babel">
-const{useState,useEffect,useCallback,useRef}=React;
+const{useState,useEffect,useCallback,useMemo,useRef}=React;
 const uid=()=>Math.random().toString(36).slice(2,10);
 const ts=()=>new Date().toISOString();
 const fmtDate=d=>new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
@@ -1020,8 +595,8 @@ const MobileNav=({active,onNav,user,onLogout,sub,impersonating})=>{
 // PAGES
 // ═══════════════════════════════════════════
 const Dashboard=({mel,org,onNav,sub,onUp,curUser,orgId})=>{
-  const s={tot:mel.length,open:mel.filter(m=>m.status==="open").length,prog:mel.filter(m=>m.status==="in_progress").length,done:mel.filter(m=>m.status==="resolved").length,crit:mel.filter(m=>m.prio==="critical"&&m.status!=="resolved"&&m.status!=="closed").length};
-  const rec=[...mel].sort((a,b)=>new Date(b.at)-new Date(a.at)).slice(0,5);
+  const s=useMemo(()=>({tot:mel.length,open:mel.filter(m=>m.status==="open").length,prog:mel.filter(m=>m.status==="in_progress").length,done:mel.filter(m=>m.status==="resolved").length,crit:mel.filter(m=>m.prio==="critical"&&m.status!=="resolved"&&m.status!=="closed").length}),[mel]);
+  const rec=useMemo(()=>[...mel].sort((a,b)=>new Date(b.at)-new Date(a.at)).slice(0,5),[mel]);
   return <div style={{padding:"20px 16px",maxWidth:1100}}>
     <TrialBanner sub={sub} onUp={onUp}/>
     <RenewalBanner sub={sub} onRenew={onUp}/>
@@ -1063,7 +638,7 @@ const MeldingenList=({mel,org,onNav,sub,cur,orgId,onNotify})=>{
   const plan=PLANS.find(p=>p.id===(sub?.plan||"starter"))||PLANS[0];
   const activeMel=mel.filter(m=>m.status!=="closed").length;
   const atLimit=plan.meldingenMax<999&&activeMel>=plan.meldingenMax;
-  const list=mel.filter(m=>{if(fs!=="all"&&m.status!==fs)return false;if(q&&!m.title.toLowerCase().includes(q.toLowerCase()))return false;return true}).sort((a,b)=>new Date(b.at)-new Date(a.at));
+  const list=useMemo(()=>mel.filter(m=>{if(fs!=="all"&&m.status!==fs)return false;if(q&&!m.title.toLowerCase().includes(q.toLowerCase()))return false;return true}).sort((a,b)=>new Date(b.at)-new Date(a.at)),[mel,fs,q]);
   const doDelete=async(e,m)=>{e.stopPropagation();if(!confirm("Weet u zeker dat u '"+m.title+"' wilt verwijderen?"))return;setDeleting(m.id);try{await DB.deleteMelding(orgId,m.id);onNotify({title:"Melding verwijderd",type:"success"})}catch(err){onNotify({title:"Fout bij verwijderen",type:"error"})}setDeleting(null)};
   return <div style={{padding:"20px 16px",maxWidth:1100}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
@@ -1222,11 +797,11 @@ const Rapportage=({mel,org,users,onNotify})=>{
   const[selMonth,setSelMonth]=useState(now.getMonth());
   const[selYear,setSelYear]=useState(now.getFullYear());
   const months=["Januari","Februari","Maart","April","Mei","Juni","Juli","Augustus","September","Oktober","November","December"];
-  const filtered=mel.filter(m=>{const d=new Date(m.at);return d.getMonth()===selMonth&&d.getFullYear()===selYear});
-  const resolved=filtered.filter(m=>m.status==="resolved"||m.status==="closed");
-  const open=filtered.filter(m=>m.status==="open"||m.status==="in_progress");
-  const byCat={};filtered.forEach(m=>{byCat[m.cat]=(byCat[m.cat]||0)+1});
-  const avgTime=resolved.length?Math.round(resolved.reduce((a,m)=>{const d1=new Date(m.at);const d2=new Date(m.resolvedAt||m.up);return a+(d2-d1)/(36e5)},0)/resolved.length):0;
+  const filtered=useMemo(()=>mel.filter(m=>{const d=new Date(m.at);return d.getMonth()===selMonth&&d.getFullYear()===selYear}),[mel,selMonth,selYear]);
+  const resolved=useMemo(()=>filtered.filter(m=>m.status==="resolved"||m.status==="closed"),[filtered]);
+  const open=useMemo(()=>filtered.filter(m=>m.status==="open"||m.status==="in_progress"),[filtered]);
+  const byCat=useMemo(()=>{const c={};filtered.forEach(m=>{c[m.cat]=(c[m.cat]||0)+1});return c},[filtered]);
+  const avgTime=useMemo(()=>resolved.length?Math.round(resolved.reduce((a,m)=>{const d1=new Date(m.at);const d2=new Date(m.resolvedAt||m.up);return a+(d2-d1)/(36e5)},0)/resolved.length):0,[resolved]);
 
   const genPDF=()=>{
     const mn=months[selMonth]+" "+selYear;
@@ -1319,12 +894,11 @@ const GroepDashboard=({org,orgId,sub,onNav,onNotify})=>{
         let locs=await DB.getGroepLocaties(groepId);
         if(locs.length===0)locs=[{id:orgId,...org}];
         setLocaties(locs);
-        const data={};
-        for(const loc of locs){
-          const mel=await DB.getLocatieMeldingen(loc.id);
-          const users=await DB.getLocatieUsers(loc.id);
-          data[loc.id]={mel,users};
-        }
+        const results=await Promise.all(locs.map(async(loc)=>{
+          const[mel,users]=await Promise.all([DB.getLocatieMeldingen(loc.id),DB.getLocatieUsers(loc.id)]);
+          return{id:loc.id,mel,users};
+        }));
+        const data={};results.forEach(r=>{data[r.id]={mel:r.mel,users:r.users}});
         setAllData(data);
       }catch(e){console.error("Groep load error:",e)}
       setLoading(false);
@@ -1333,16 +907,11 @@ const GroepDashboard=({org,orgId,sub,onNav,onNotify})=>{
 
   if(loading)return <div style={{padding:"20px 16px",textAlign:"center"}}><p style={{color:C.dim}}>Locatiegegevens laden...</p></div>;
 
-  const totals={mel:0,open:0,prog:0,done:0,crit:0,users:0};
-  locaties.forEach(loc=>{
-    const d=allData[loc.id]||{mel:[],users:[]};
-    totals.mel+=d.mel.length;
-    totals.open+=d.mel.filter(m=>m.status==="open").length;
-    totals.prog+=d.mel.filter(m=>m.status==="in_progress").length;
-    totals.done+=d.mel.filter(m=>m.status==="resolved"||m.status==="closed").length;
-    totals.crit+=d.mel.filter(m=>m.prio==="critical"&&m.status!=="resolved"&&m.status!=="closed").length;
-    totals.users+=d.users.length;
-  });
+  const totals=useMemo(()=>{
+    const t={mel:0,open:0,prog:0,done:0,crit:0,users:0};
+    locaties.forEach(loc=>{const d=allData[loc.id]||{mel:[],users:[]};t.mel+=d.mel.length;t.open+=d.mel.filter(m=>m.status==="open").length;t.prog+=d.mel.filter(m=>m.status==="in_progress").length;t.done+=d.mel.filter(m=>m.status==="resolved"||m.status==="closed").length;t.crit+=d.mel.filter(m=>m.prio==="critical"&&m.status!=="resolved"&&m.status!=="closed").length;t.users+=d.users.length});
+    return t;
+  },[locaties,allData]);
 
   const plan=PLANS.find(p=>p.id===(sub?.plan||"groep"));
   const nLoc=locaties.length;

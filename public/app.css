@@ -1,0 +1,13 @@
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body,#root{height:100%;width:100%;margin:0}
+body{background:#f8fafc;font-family:'Inter',system-ui,sans-serif;color:#1e293b;-webkit-font-smoothing:antialiased}
+.app-shell{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+input::placeholder,textarea::placeholder{color:#94a3b8}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:#fff;border-top:1px solid #e2e8f0;padding:4px 8px;padding-bottom:calc(4px + env(safe-area-inset-bottom))}
+@media(max-width:768px){.mobile-nav{display:flex}.desktop-sidebar{display:none!important}.main-content{padding-bottom:68px!important}}
+@media print{body::before{content:"© 2026 TechMeld™ — Vertrouwelijk";display:block;padding:8px;font-size:10px;text-align:center;color:#999;border-bottom:1px solid #e5e7eb}}
+.grecaptcha-badge{visibility:hidden!important}
