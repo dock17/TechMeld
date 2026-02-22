@@ -272,7 +272,8 @@ service cloud.firestore {
     // ════════════════════════════════════════════
     match /auditLog/{logId} {
       allow read: if isAuth() && isSuperAdmin();
-      allow write: if false; // Only via Cloud Functions
+      allow create: if isAuth() && isSuperAdmin();
+      allow update, delete: if false;
     }
   }
 }

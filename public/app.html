@@ -2192,7 +2192,7 @@ function App(){
   var curPerms=store.curUser?.perms||DEFAULT_PERMS[store.curUser?.role]||DEFAULT_PERMS.reporter;
   // Technicians: never allow rapportage, groep, vergelijk, users, billing, settings — regardless of saved perms
   if(store.curUser?.role==="technician"){curPerms=curPerms.filter(function(p){return !["rapportage","groep","vergelijk","users","billing","settings"].includes(p)})}
-  const handleImpersonate=(oid,oname)=>{setImpersonating({orgId:oid,orgName:oname});setOrgId(oid);setPage("dashboard")};
+  const handleImpersonate=(oid,oname)=>{setImpersonating({orgId:oid,orgName:oname});setOrgId(oid);setPage("dashboard");try{db.collection("auditLog").add({action:"impersonate",actorUid:store.curUser?.id||"",details:{orgId:oid,orgName:oname},timestamp:_serverTimestamp()})}catch(e){}};
   const stopImpersonate=()=>{setImpersonating(null);setOrgId(null);setPage("admin")};
   const pg=()=>{
     // Super admin — show Admin Panel unless impersonating

@@ -11,3 +11,6 @@ input::placeholder,textarea::placeholder{color:#94a3b8}
 @media(max-width:768px){.mobile-nav{display:flex}.desktop-sidebar{display:none!important}.main-content{padding-bottom:68px!important}}
 @media print{body::before{content:"© 2026 TechMeld™ — Vertrouwelijk";display:block;padding:8px;font-size:10px;text-align:center;color:#999;border-bottom:1px solid #e5e7eb}}
 .grecaptcha-badge{visibility:hidden!important}
+.skip-link{position:absolute;top:-40px;left:0;background:#2563eb;color:#fff;padding:8px 16px;z-index:10000;font-size:14px;font-weight:600;border-radius:0 0 8px 0;text-decoration:none;transition:top .2s}
+.skip-link:focus{top:0}
+*:focus-visible{outline:2px solid #2563eb;outline-offset:2px;border-radius:2px}

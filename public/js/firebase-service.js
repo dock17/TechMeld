@@ -1,14 +1,14 @@
 (function(){console.log('%c© TechMeld™ — Alle rechten voorbehouden','color:#2563eb;font-size:14px;font-weight:bold');console.log('%cBeschermd door Belgisch Auteursrecht & EU-richtlijn 2009/24/EG.','color:#64748b;font-size:11px')})();
 if(location.hostname!=='localhost'&&!location.hostname.startsWith('127.')){const _ce=console.error;console.error=function(){const a=[...arguments].map(v=>typeof v==='string'?v.replace(/[a-zA-Z0-9]{20,}/g,'[REDACTED]'):v);_ce.apply(console,a)};}
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(()=>{})})}
-let deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;window.dispatchEvent(new CustomEvent('pwa-installable'))});
+var deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;window.dispatchEvent(new CustomEvent('pwa-installable'))});
 
 // ═══════════════════════════════════════════
 // FIREBASE CONFIG & INITIALIZATION
 // ═══════════════════════════════════════════
 // ⚠️ VUL HIER JE EIGEN FIREBASE CONFIG IN
 // Ga naar Firebase Console > Project Settings > General > Your apps > Config
-const firebaseConfig = {
+var firebaseConfig = {
   apiKey: "AIzaSyDGgQBiHQVa8z8khvrIKp392mc_d8dDEJU",
   authDomain: "techmeld.firebaseapp.com",
   projectId: "techmeld",
@@ -19,9 +19,9 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let fb = null, auth = null, db = null, storage = null, messaging = null, functions = null;
-let firebaseReady = false;
-const VAPID_KEY = "BHPoEmgQs-YqKYBYlXsTWS_zAjpvJ8PBdsjowoU77STg9d5ExdDXG5-3TvVnAjQhRp_xgD40vx7XX92L3rXRxDk";
+var fb = null, auth = null, db = null, storage = null, messaging = null, functions = null;
+var firebaseReady = false;
+var VAPID_KEY = "BHPoEmgQs-YqKYBYlXsTWS_zAjpvJ8PBdsjowoU77STg9d5ExdDXG5-3TvVnAjQhRp_xgD40vx7XX92L3rXRxDk";
 try {
   fb = firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
@@ -47,7 +47,7 @@ try {
 // ═══════════════════════════════════════════
 // PUSH NOTIFICATIONS (FCM + Browser)
 // ═══════════════════════════════════════════
-const PushNotify={
+var PushNotify={
   supported:'Notification' in window,
   token:null,
   _userId:null,
@@ -118,23 +118,23 @@ const PushNotify={
   }
 };
 
-const sanitize=(obj)=>{
+var sanitize=(obj)=>{
   if(!obj||typeof obj!=='object')return obj;
   if(obj.toDate&&typeof obj.toDate==='function')return obj.toDate().toISOString();
   if(Array.isArray(obj))return obj.map(sanitize);
   const out={};for(const k of Object.keys(obj))out[k]=sanitize(obj[k]);return out;
 };
-const escHtml=(s)=>s?String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"):"";
-const safeUrl=(url)=>{if(!url||typeof url!=="string")return"";try{const u=new URL(url);return["https:","http:","data:"].includes(u.protocol)?url:""}catch(e){return""}};
-const _FieldValue = firebase.firestore.FieldValue;
-const _Timestamp = firebase.firestore.Timestamp;
-const _serverTimestamp = () => _FieldValue.serverTimestamp();
-const _fromDate = (d) => _Timestamp.fromDate(d);
-const _call = async (name, data) => {
+var escHtml=(s)=>s?String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"):"";
+var safeUrl=(url)=>{if(!url||typeof url!=="string")return"";try{const u=new URL(url);return["https:","http:","data:"].includes(u.protocol)?url:""}catch(e){return""}};
+var _FieldValue = firebase.firestore.FieldValue;
+var _Timestamp = firebase.firestore.Timestamp;
+var _serverTimestamp = () => _FieldValue.serverTimestamp();
+var _fromDate = (d) => _Timestamp.fromDate(d);
+var _call = async (name, data) => {
   if (!functions) throw new Error("Cloud Functions niet beschikbaar");
   return await functions.httpsCallable(name)(data || {});
 };
-const DB = {
+var DB = {
   serverTimestamp: _serverTimestamp,
   fromDate: _fromDate,
   call: _call,
