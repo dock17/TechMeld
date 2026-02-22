@@ -3,7 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
+    <script>
+    // Redirect Firebase auth action links (invite password reset) to app.html
+    (function(){
+        var p=new URLSearchParams(window.location.search);
+        if(p.get("mode")==="resetPassword"&&p.get("oobCode")){
+            window.location.replace("app.html"+window.location.search);
+        }
+    })();
+    </script>
+
     <!-- SEO Meta Tags -->
     <title>TechMeld — Eén platform voor technisch onderhoud | Zorg, Hotels & Facility Management</title>
     <meta name="description" content="TechMeld is het centrale platform voor technisch onderhoudsbeheer. Meldingen, opvolging en rapportage in één systeem. Gebouwd voor woonzorgcentra, ziekenhuizen, hotels en facilitaire diensten in België.">
