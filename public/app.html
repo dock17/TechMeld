@@ -102,6 +102,8 @@ try {
 const PushNotify={
   supported:'Notification' in window,
   token:null,
+  _userId:null,
+  _orgId:null,
   knownIds:new Set(),
   get permission(){return this.supported?Notification.permission:'denied'},
   async requestPermission(){
@@ -119,6 +121,8 @@ const PushNotify={
     }catch(e){console.warn('FCM token error:',e);return null}
   },
   async registerAndSave(userId,orgId){
+    this._userId=userId;
+    this._orgId=orgId;
     var granted=await this.requestPermission();
     if(!granted)return null;
     var token=await this.getFCMToken();
@@ -126,7 +130,20 @@ const PushNotify={
       await DB.saveFCMToken(userId,orgId,token);
       console.log('FCM token saved');
     }
+    // Listen for token refresh
+    if(messaging){
+      var self=this;
+      messaging.onMessage(function(payload){
+        var d=payload.notification||payload.data||{};
+        self.show(d.title||'TechMeld',d.body||'Nieuwe melding',d.tag||'tm-fg-'+Date.now());
+      });
+    }
     return token;
+  },
+  async refreshToken(){
+    if(!this._userId||!this._orgId||this.permission!=='granted')return;
+    var token=await this.getFCMToken();
+    if(token){await DB.saveFCMToken(this._userId,this._orgId,token)}
   },
   show(title,body,tag){
     if(this.permission!=='granted')return;
@@ -2202,10 +2219,11 @@ function App(){
     if(!authed||!orgId||!store.curUser)return;
     window.__tmUserId=store.curUser.id;window.__tmOrgId=orgId;
     if(PushNotify.permission==='granted'){
-      PushNotify.getFCMToken().then(function(token){
-        if(token){DB.saveFCMToken(store.curUser.id,orgId,token);console.log('Push notifications enabled')}
-      });
+      PushNotify.registerAndSave(store.curUser.id,orgId);
     }
+    // Refresh token every 30 minutes to prevent staleness
+    var interval=setInterval(function(){PushNotify.refreshToken()},30*60*1000);
+    return function(){clearInterval(interval)};
   },[authed,orgId,store.curUser?.id]);
 
   // Auto-update trial status to expired in database

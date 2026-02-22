@@ -38,16 +38,37 @@ async function getUsers(orgId) { const s=await db.collection("users").where("org
 
 async function sendFCM(userIds, title, body, tag) {
   if(!userIds.length)return;
-  const snap=await db.collection("fcmTokens").where("userId","in",userIds.slice(0,10)).get();
+  // Firestore 'in' supports max 10 — batch if needed
+  const allDocs=[];
+  for(let i=0;i<userIds.length;i+=10){
+    const batch=userIds.slice(i,i+10);
+    const snap=await db.collection("fcmTokens").where("userId","in",batch).get();
+    snap.forEach(d=>allDocs.push(d));
+  }
   // Deduplicate: only send to one token per user
   const seen=new Set();
   const tokens=[];
-  snap.forEach(d=>{
+  allDocs.forEach(d=>{
     const uid=d.data().userId;
-    if(!seen.has(uid)){seen.add(uid);tokens.push(d.data().token);}
+    if(!seen.has(uid)){seen.add(uid);tokens.push({ref:d.ref,token:d.data().token});}
   });
   const ntag=tag||("tm-"+Date.now());
-  const sends=tokens.map(t=>admin.messaging().send({token:t,data:{title,body,tag:ntag,link:"https://techmeld.eu"}}).catch(()=>{}));
+  const sends=tokens.map(async(t)=>{
+    try{
+      await admin.messaging().send({
+        token:t.token,
+        notification:{title,body},
+        data:{title,body,tag:ntag,link:"https://techmeld.eu"},
+        webpush:{notification:{icon:"/favicon.ico",badge:"/favicon.ico",vibrate:[200,100,200],tag:ntag}},
+      });
+    }catch(e){
+      // Clean up invalid tokens
+      if(e.code==="messaging/registration-token-not-registered"||e.code==="messaging/invalid-registration-token"){
+        console.log("Removing stale FCM token:",t.token.slice(0,20)+"...");
+        await t.ref.delete().catch(()=>{});
+      }
+    }
+  });
   if(sends.length)await Promise.all(sends);
 }
 
