@@ -852,9 +852,11 @@ const Pricing=({sub,onSelect,onBack,onNotify})=>{
 // ═══════════════════════════════════════════
 // SIDEBAR (dark)
 // ═══════════════════════════════════════════
+const TECH_BLOCKED=["rapportage","groep","vergelijk","users","billing","settings"];
 const Sidebar=({active,onNav,user,onLogout,sub})=>{
   var isSA=SUPER_ADMINS.includes(user?.email);
   var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.reporter;
+  if(user?.role==="technician"){userPerms=userPerms.filter(function(p){return !TECH_BLOCKED.includes(p)})}
   const isGroep=sub?.plan==="groep";
   const items=isSA?[{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]:[{id:"dashboard",ic:"dashboard",l:"Dashboard"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuwe Melding"},{id:"building",ic:"building",l:"Gebouwen"},{id:"floorplans",ic:"floor",l:"Plattegronden"},{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)});
   if(!isSA&&SUPER_ADMINS.includes(user?.email))items.push({id:"admin",ic:"shield",l:"⚡ Admin"});
@@ -885,6 +887,7 @@ const Sidebar=({active,onNav,user,onLogout,sub})=>{
 const MobileNav=({active,onNav,user,onLogout,sub})=>{
   const[showMenu,setShowMenu]=useState(false);
   var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.reporter;
+  if(user?.role==="technician"){userPerms=userPerms.filter(function(p){return !TECH_BLOCKED.includes(p)})}
   const isGroep=sub?.plan==="groep";
   const items=[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}].filter(function(it){return it.id==="menu"||userPerms.includes(it.id)});
   var menuItems=[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(SUPER_ADMINS.includes(user?.email)?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
@@ -2353,6 +2356,8 @@ function App(){
   const cur=detId?store.meldingen.find(m=>m.id===detId):null;
 
   var curPerms=store.curUser?.perms||DEFAULT_PERMS[store.curUser?.role]||DEFAULT_PERMS.reporter;
+  // Technicians: never allow rapportage, groep, vergelijk, users, billing, settings — regardless of saved perms
+  if(store.curUser?.role==="technician"){curPerms=curPerms.filter(function(p){return !["rapportage","groep","vergelijk","users","billing","settings"].includes(p)})}
   const handleImpersonate=(oid,oname)=>{setImpersonating({orgId:oid,orgName:oname});setOrgId(oid);setPage("dashboard")};
   const stopImpersonate=()=>{setImpersonating(null);setOrgId(null);setPage("admin")};
   const pg=()=>{

@@ -29,7 +29,7 @@ messaging.onBackgroundMessage(function(payload) {
 });
 
 // Cache management
-var CACHE_NAME = 'techmeld-v4';
+var CACHE_NAME = 'techmeld-v5';
 var ASSETS = ['/manifest.json'];
 
 self.addEventListener('install', function(e) {
