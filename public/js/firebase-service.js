@@ -1,5 +1,28 @@
-(function(){console.log('%c© TechMeld™ — Alle rechten voorbehouden','color:#2563eb;font-size:14px;font-weight:bold');console.log('%cBeschermd door Belgisch Auteursrecht & EU-richtlijn 2009/24/EG.','color:#64748b;font-size:11px')})();
+(function(){console.log('%c© TechMeld™ — Alle rechten voorbehouden','color:#2563eb;font-size:14px;font-weight:bold');console.log('%cBeschermd door Belgisch Auteursrecht & EU-richtlijn 2009/24/EG.','color:#64748b;font-size:11px');console.log('%cOngeautoriseerd kopiëren, reverse-engineering of hergebruik is verboden.','color:#dc2626;font-size:11px')})();
 if(location.hostname!=='localhost'&&!location.hostname.startsWith('127.')){const _ce=console.error;console.error=function(){const a=[...arguments].map(v=>typeof v==='string'?v.replace(/[a-zA-Z0-9]{20,}/g,'[REDACTED]'):v);_ce.apply(console,a)};}
+// ═══════════════════════════════════════════
+// CODE PROTECTION (deterrent)
+// ═══════════════════════════════════════════
+(function(){
+  if(location.hostname==='localhost'||location.hostname.startsWith('127.'))return;
+  // Disable right-click context menu
+  document.addEventListener('contextmenu',function(e){e.preventDefault()});
+  // Disable text selection on body (inputs/textareas remain selectable)
+  document.addEventListener('selectstart',function(e){
+    var t=e.target.tagName;if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT')return;e.preventDefault();
+  });
+  // Block common dev tool shortcuts
+  document.addEventListener('keydown',function(e){
+    // F12
+    if(e.key==='F12'){e.preventDefault();return}
+    // Ctrl+Shift+I (DevTools), Ctrl+Shift+J (Console), Ctrl+Shift+C (Inspector)
+    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&['I','J','C'].includes(e.key.toUpperCase())){e.preventDefault();return}
+    // Ctrl+U (View Source)
+    if((e.ctrlKey||e.metaKey)&&e.key.toUpperCase()==='U'){e.preventDefault();return}
+    // Ctrl+S (Save page)
+    if((e.ctrlKey||e.metaKey)&&e.key.toUpperCase()==='S'){e.preventDefault();return}
+  });
+})();
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(()=>{})})}
 var deferredPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;window.dispatchEvent(new CustomEvent('pwa-installable'))});
 
