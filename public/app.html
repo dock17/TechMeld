@@ -202,9 +202,11 @@ const DB = {
     const cred = await auth.createUserWithEmailAndPassword(email, password);
     await cred.user.updateProfile({displayName: name});
     // Super admin — no org, no trial (profile created server-side)
-    if(SUPER_ADMINS.includes(email)){
+    try{
       await functions.httpsCallable('createSuperAdminProfile')({name});
       return cred.user;
+    }catch(e){
+      // Not a super admin — continue with normal registration
     }
     // Create organization doc
     const orgRef = db.collection('organizations').doc();
@@ -908,12 +910,11 @@ const Pricing=({sub,org,onSelect,onBack,onNotify})=>{
 // ═══════════════════════════════════════════
 const TECH_BLOCKED=["rapportage","groep","vergelijk","users","billing","settings"];
 const Sidebar=({active,onNav,user,onLogout,sub})=>{
-  var isSA=SUPER_ADMINS.includes(user?.email);
+  var isSA=user?.role==="superadmin";
   var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.reporter;
   if(user?.role==="technician"){userPerms=userPerms.filter(function(p){return !TECH_BLOCKED.includes(p)})}
   const isGroep=sub?.plan==="groep";
   const items=isSA?[{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]:[{id:"dashboard",ic:"dashboard",l:"Dashboard"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuwe Melding"},{id:"building",ic:"building",l:"Gebouwen"},{id:"floorplans",ic:"floor",l:"Plattegronden"},{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)});
-  if(!isSA&&SUPER_ADMINS.includes(user?.email))items.push({id:"admin",ic:"shield",l:"⚡ Admin"});
   const pl=PLANS.find(p=>p.id===sub?.plan);
   return <div className="desktop-sidebar" style={{width:230,height:"100%",background:C.sbBg,display:"flex",flexDirection:"column",flexShrink:0,overflow:"auto"}}>
     <div style={{padding:"16px 14px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid rgba(255,255,255,.06)"}}>
@@ -944,7 +945,7 @@ const MobileNav=({active,onNav,user,onLogout,sub})=>{
   if(user?.role==="technician"){userPerms=userPerms.filter(function(p){return !TECH_BLOCKED.includes(p)})}
   const isGroep=sub?.plan==="groep";
   const items=[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}].filter(function(it){return it.id==="menu"||userPerms.includes(it.id)});
-  var menuItems=[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(SUPER_ADMINS.includes(user?.email)?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
+  var menuItems=[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(user?.role==="superadmin"?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
   return <><div className="mobile-nav">{items.map(it=><button key={it.id} onClick={function(){if(it.id==="menu")setShowMenu(!showMenu);else{setShowMenu(false);onNav(it.id)}}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"5px 2px",border:"none",cursor:"pointer",borderRadius:6,background:"transparent",color:(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}}>
     {it.id==="new"?<div style={{width:38,height:38,borderRadius:19,marginTop:-16,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(37,99,235,.3)"}}><Icon name="plus" size={22} color="white"/></div>:<Icon name={it.ic} size={18} color={(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}/>}
     <span style={{fontSize:9,fontWeight:(active===it.id||(it.id==="menu"&&showMenu))?600:400}}>{it.l}</span>
@@ -1775,7 +1776,6 @@ const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
 // ═══════════════════════════════════════════
 // SUPER ADMIN PANEL
 // ═══════════════════════════════════════════
-const SUPER_ADMINS=["tigrealata@hotmail.com","info@techmeld.eu"];
 const AdminPanel=({curUser,onImpersonate})=>{
   const[orgs,setOrgs]=useState([]);const[allUsers,setAllUsers]=useState([]);const[subs,setSubs]=useState([]);const[trials,setTrials]=useState([]);const[loading,setLoading]=useState(true);
   const[confirm,setConfirm]=useState(null);const[search,setSearch]=useState("");const[tab,setTab]=useState("orgs");
@@ -1786,7 +1786,7 @@ const AdminPanel=({curUser,onImpersonate})=>{
     if(!firebaseReady)return;
     var unsubs=[];
     unsubs.push(db.collection('organizations').onSnapshot(function(snap){setOrgs(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}))}));
-    unsubs.push(db.collection('users').onSnapshot(function(snap){setAllUsers(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}).filter(function(u){return !SUPER_ADMINS.includes(u.email)}))}));
+    unsubs.push(db.collection('users').onSnapshot(function(snap){setAllUsers(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}).filter(function(u){return u.role!=="superadmin"}))}));
     unsubs.push(db.collection('subscriptions').onSnapshot(function(snap){setSubs(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}))}));
     unsubs.push(db.collection('trialHistory').onSnapshot(function(snap){setTrials(snap.docs.map(function(d){return sanitize({id:d.id,...d.data()})}))}));
     setLoading(false);
@@ -2327,7 +2327,7 @@ function App(){
             await new Promise(r=>setTimeout(r,1500));
             profile=await DB.getUserProfile(user.uid);
           }
-          var isSA=SUPER_ADMINS.includes(user.email);
+          var isSA=profile&&profile.role==="superadmin";
           if(isSA){
             // Super admin — no org needed
             setStore(p=>({...p,curUser:{id:user.uid,name:profile?.name||user.displayName||"Admin",email:user.email,role:"superadmin",av:profile?.avatar||(user.displayName||"A").slice(0,2).toUpperCase()}}));
@@ -2400,7 +2400,7 @@ function App(){
 
   // Auto-update trial status to expired in database
   useEffect(()=>{
-    const isSA=SUPER_ADMINS.includes(store.curUser?.email);
+    const isSA=store.curUser?.role==="superadmin";
     const isTrialExpired=!isSA&&store.sub?.status==="trial"&&store.sub.trialEnd&&new Date(store.sub.trialEnd)<new Date();
     if(isTrialExpired&&orgId){
       DB.updateSubscription(orgId,{status:"expired"}).catch(e=>console.error("Trial expire update error:",e));
@@ -2482,7 +2482,7 @@ function App(){
     // Paid subscription — activated via Cloud Function (server-side validation)
     if(orgId){
       try{
-        const result=await functions.httpsCallable('activateSubscription')({planId:id,method:method||"paypal",billing:billing||"month"});
+        const result=await functions.httpsCallable('activateSubscription')({planId:id,method:method||"paypal",billing:billing||"month",orgId});
         if(result.data.success){
           setStore(p=>({...p,sub:{...p.sub,...result.data}}));
         }
@@ -2528,7 +2528,7 @@ function App(){
   </div>;
 
   // Trial expiration check
-  const isSuperAdmin=SUPER_ADMINS.includes(store.curUser?.email);
+  const isSuperAdmin=store.curUser?.role==="superadmin";
   const trialExpired=!isSuperAdmin&&(store.sub?.status==="trial"||store.sub?.status==="expired")&&store.sub.trialEnd&&new Date(store.sub.trialEnd)<new Date();
   if(trialExpired&&page!=="billing"){
     const expPlan=PLANS.find(p=>p.id===store.sub?.plan);
@@ -2582,7 +2582,7 @@ function App(){
       case"vergelijk":return <VergelijkendeRapportage org={store.org} orgId={orgId} onNotify={notify}/>;
       case"users":return <Users users={store.users} cur={store.curUser} orgId={orgId} sub={store.sub} onUpd={u=>setStore(p=>({...p,users:u}))} onNotify={notify}/>;
       case"settings":return <Settings org={store.org} onUpd={o=>{setStore(p=>({...p,org:o}));if(orgId)DB.updateOrg(orgId,{name:o.name,type:o.type,buildings:o.buildings||[],btwNummer:o.btwNummer||"",address:o.address||"",postcode:o.postcode||"",city:o.city||""}).catch(e=>console.error(e))}} onNotify={notify} onNav={nav}/>;
-      case"admin":return SUPER_ADMINS.includes(store.curUser?.email)?<AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
+      case"admin":return store.curUser?.role==="superadmin"?<AdminPanel curUser={store.curUser} onImpersonate={handleImpersonate}/>:<Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
       default:return <Dashboard mel={store.meldingen} org={store.org} onNav={nav} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} onUp={()=>nav("billing")}/>;
     }
   };

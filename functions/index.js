@@ -18,6 +18,26 @@ function getTransporter() {
   });
 }
 const FROM = `TechMeld <${EMAIL_USER}>`;
+
+async function requireAdminOfOrg(auth, orgId) {
+  if (!auth) throw new HttpsError("unauthenticated", "Login vereist");
+  const userDoc = await db.collection("users").doc(auth.uid).get();
+  if (!userDoc.exists) throw new HttpsError("not-found", "Gebruiker niet gevonden");
+  const userData = userDoc.data();
+  if (userData.role === "superadmin") return userData;
+  if (userData.role === "admin" && userData.orgId === orgId) return userData;
+  throw new HttpsError("permission-denied", "Niet geautoriseerd");
+}
+
+async function requireSuperAdmin(auth) {
+  if (!auth) throw new HttpsError("unauthenticated", "Login vereist");
+  const userDoc = await db.collection("users").doc(auth.uid).get();
+  if (!userDoc.exists) throw new HttpsError("not-found", "Gebruiker niet gevonden");
+  const userData = userDoc.data();
+  if (userData.role !== "superadmin") throw new HttpsError("permission-denied", "Alleen super admins");
+  return userData;
+}
+
 const PRIO = { critical:{l:"Kritiek",c:"#dc2626",b:"#fef2f2"}, high:{l:"Hoog",c:"#ea580c",b:"#fff7ed"}, medium:{l:"Normaal",c:"#2563eb",b:"#eff6ff"}, low:{l:"Laag",c:"#16a34a",b:"#f0fdf4"} };
 const STL = { open:"Open", in_progress:"In Behandeling", resolved:"Opgelost", closed:"Gesloten" };
 
@@ -170,7 +190,7 @@ exports.verifyRecaptcha = onCall({region:"europe-west1"}, async(req)=>{
 
 exports.inviteUser = onCall({region:"europe-west1",secrets:["EMAIL_PASS"]}, async(req)=>{
   const{name,email,role,orgId}=req.data;
-  if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
+  await requireAdminOfOrg(req.auth, orgId);
   let ur;
   try{ur=await admin.auth().createUser({email,displayName:name});}
   catch(e){if(e.code==="auth/email-already-exists")ur=await admin.auth().getUserByEmail(email);else throw new HttpsError("internal",e.message);}
@@ -202,6 +222,9 @@ exports.updateUserRole = onCall({region:"europe-west1"}, async(req)=>{
   if(!userId||!role)throw new HttpsError("invalid-argument","userId en role zijn vereist");
   const allowed=["admin","technician","reporter"];
   if(!allowed.includes(role))throw new HttpsError("invalid-argument","Ongeldig rol");
+  const targetDoc = await db.collection("users").doc(userId).get();
+  if(!targetDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
+  await requireAdminOfOrg(req.auth, targetDoc.data().orgId);
   await db.collection("users").doc(userId).update({role,perms:perms||[]});
   return{success:true};
 });
@@ -209,6 +232,12 @@ exports.updateUserRole = onCall({region:"europe-west1"}, async(req)=>{
 exports.deleteUserAccount = onCall({region:"europe-west1"}, async(req)=>{
   const{userId}=req.data;
   if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
+  const targetDoc = await db.collection("users").doc(userId).get();
+  if(targetDoc.exists) {
+    await requireAdminOfOrg(req.auth, targetDoc.data().orgId);
+  } else {
+    await requireSuperAdmin(req.auth);
+  }
   try{await admin.auth().deleteUser(userId);}catch(e){}
   try{await db.collection("users").doc(userId).delete();}catch(e){}
   const t=await db.collection("fcmTokens").where("userId","==",userId).get();
@@ -410,18 +439,14 @@ exports.capturePayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIE
 
 exports.activateSubscription = onCall({region:"europe-west1"}, async(req)=>{
   if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
+  await requireSuperAdmin(req.auth);
   const{planId,method,billing}=req.data;
   if(!planId||!method||!billing) throw new HttpsError("invalid-argument","planId, method en billing zijn vereist");
   const planInfo=PLANS_SERVER[planId];
   if(!planInfo) throw new HttpsError("invalid-argument","Ongeldig plan: "+planId);
   if(!["month","year"].includes(billing)) throw new HttpsError("invalid-argument","Ongeldige billing periode");
   if(method!=="bank") throw new HttpsError("invalid-argument","Gebruik PayPal checkout voor PayPal-betalingen");
-  // Verify caller is admin of their org
-  const userDoc=await db.collection("users").doc(req.auth.uid).get();
-  if(!userDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
-  const userData=userDoc.data();
-  if(userData.role!=="admin") throw new HttpsError("permission-denied","Alleen admins kunnen abonnementen wijzigen");
-  const orgId=userData.orgId;
+  const{orgId}=req.data;
   if(!orgId) throw new HttpsError("failed-precondition","Geen organisatie gevonden");
   // Calculate expiration
   const now=new Date();
@@ -469,7 +494,7 @@ exports.createSuperAdminProfile = onCall({region:"europe-west1"}, async(req)=>{
 
 exports.deleteOrganization = onCall({region:"europe-west1"}, async(req)=>{
   const{orgId}=req.data;
-  if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
+  await requireSuperAdmin(req.auth);
   // Delete all users in this org (Auth + Firestore)
   const usersSnap=await db.collection("users").where("orgId","==",orgId).get();
   for(const doc of usersSnap.docs){
