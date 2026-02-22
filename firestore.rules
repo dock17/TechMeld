@@ -2,43 +2,254 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users: can read own profile, can read users in same org
+    // ════════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ════════════════════════════════════════════
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Cached per evaluation — 1 get() call
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userOrgId() {
+      return userData().orgId;
+    }
+
+    function userRole() {
+      return userData().role;
+    }
+
+    function isSuperAdmin() {
+      return isAuth() && userRole() == "superadmin";
+    }
+
+    function isMemberOf(orgId) {
+      return isAuth() && userOrgId() == orgId;
+    }
+
+    function isAdminOf(orgId) {
+      return isMemberOf(orgId) && userRole() == "admin";
+    }
+
+    function orgData(orgId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId)).data;
+    }
+
+    // Check if user's org and target org share the same groepId
+    // Used for Groepslicentie cross-org access
+    function sameGroep(targetOrgId) {
+      return userOrgId() != null
+        && orgData(userOrgId()).groepId != null
+        && orgData(targetOrgId).groepId != null
+        && orgData(userOrgId()).groepId == orgData(targetOrgId).groepId;
+    }
+
+    // ════════════════════════════════════════════
+    // USERS
+    // ════════════════════════════════════════════
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null;
-      allow delete: if false; // only via Cloud Function
+
+      // GET: own profile, same org members, groep members, superadmin
+      allow get: if isAuth() && (
+        request.auth.uid == userId
+        || resource.data.orgId == userOrgId()
+        || isSuperAdmin()
+      );
+
+      // LIST: same org query, groep org query, superadmin
+      allow list: if isAuth() && (
+        resource.data.orgId == userOrgId()
+        || isSuperAdmin()
+        || sameGroep(resource.data.orgId)
+      );
+
+      // CREATE: only own profile during registration
+      // Role must be "admin" (self-registration creates org owner)
+      // Superadmin creation MUST go through Cloud Function
+      allow create: if isAuth()
+        && request.auth.uid == userId
+        && request.resource.data.role == "admin"
+        && request.resource.data.keys().hasAll(["name", "email", "role", "orgId"]);
+
+      // UPDATE:
+      //   - Own profile: allowed, but CANNOT change role or orgId
+      //   - Admin of same org: can change any field (role changes, etc.)
+      //   - Superadmin: can change any field
+      allow update: if isAuth() && (
+        (request.auth.uid == userId
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["role", "orgId"]))
+        || isAdminOf(resource.data.orgId)
+        || isSuperAdmin()
+      );
+
+      // DELETE: only via Cloud Functions (deleteUserAccount)
+      allow delete: if false;
     }
 
-    // Organizations: authenticated users can read/write their org
+    // ════════════════════════════════════════════
+    // ORGANIZATIONS
+    // ════════════════════════════════════════════
     match /organizations/{orgId} {
-      allow read, write: if request.auth != null;
 
-      // Meldingen subcollection
+      // GET: own org, groep org, superadmin
+      allow get: if isAuth() && (
+        isMemberOf(orgId)
+        || isSuperAdmin()
+        || sameGroep(orgId)
+      );
+
+      // LIST: groep query (same groepId), superadmin
+      allow list: if isAuth() && (
+        isSuperAdmin()
+        || (resource.data.groepId != null
+            && resource.data.groepId == orgData(userOrgId()).groepId)
+      );
+
+      // CREATE: during registration — must be org owner
+      allow create: if isAuth()
+        && request.resource.data.ownerId == request.auth.uid;
+
+      // UPDATE: only admin of this org, or superadmin
+      allow update: if isAuth() && (
+        isAdminOf(orgId)
+        || isSuperAdmin()
+      );
+
+      // DELETE: only via Cloud Functions (deleteOrganization)
+      allow delete: if false;
+
+      // ── Meldingen ──
       match /meldingen/{meldingId} {
-        allow read, write: if request.auth != null;
+
+        // READ: org members, groep members, superadmin
+        allow read: if isAuth() && (
+          isMemberOf(orgId)
+          || isSuperAdmin()
+          || sameGroep(orgId)
+        );
+
+        // CREATE: only org members (reporters, technicians, admins)
+        allow create: if isAuth() && isMemberOf(orgId);
+
+        // UPDATE: org members (status changes, comments, assignment)
+        allow update: if isAuth() && (
+          isMemberOf(orgId)
+          || isSuperAdmin()
+        );
+
+        // DELETE: only admin of org or superadmin
+        allow delete: if isAuth() && (
+          isAdminOf(orgId)
+          || isSuperAdmin()
+        );
       }
 
-      // Invoices subcollection
+      // ── Invoices ──
       match /invoices/{invoiceId} {
-        allow read, write: if request.auth != null;
+
+        // READ: only admin of org (billing info) or superadmin
+        allow read: if isAuth() && (
+          isAdminOf(orgId)
+          || isSuperAdmin()
+        );
+
+        // CREATE: admin of org (generated after payment confirmation)
+        allow create: if isAuth() && isAdminOf(orgId);
+
+        // Invoices are immutable — no update/delete from client
+        allow update, delete: if false;
+      }
+
+      // ── Floorplans ──
+      match /floorplans/{floorplanId} {
+
+        // READ: all org members
+        allow read: if isAuth() && (
+          isMemberOf(orgId)
+          || isSuperAdmin()
+        );
+
+        // WRITE: only admin of org
+        allow write: if isAuth() && (
+          isAdminOf(orgId)
+          || isSuperAdmin()
+        );
       }
     }
 
-    // Subscriptions: authenticated users can read/write
+    // ════════════════════════════════════════════
+    // SUBSCRIPTIONS
+    // ════════════════════════════════════════════
     match /subscriptions/{subId} {
-      allow read, write: if request.auth != null;
+
+      // READ: only members of this org (subId == orgId)
+      allow read: if isAuth() && (
+        userOrgId() == subId
+        || isSuperAdmin()
+      );
+
+      // CREATE: during registration only — must be starter trial
+      allow create: if isAuth()
+        && request.resource.data.plan == "starter"
+        && request.resource.data.status == "trial"
+        && request.resource.data.orgId == subId;
+
+      // UPDATE: only trial-to-trial upgrade from client (starter → professional trial)
+      // All paid plan activations MUST go through Cloud Functions
+      allow update: if isAuth() && (
+        (userOrgId() == subId
+          && userRole() == "admin"
+          && resource.data.status in ["trial", "expired"]
+          && request.resource.data.status == "trial"
+          && request.resource.data.plan in ["starter", "professional"])
+        || isSuperAdmin()
+      );
+
+      // DELETE: only via Cloud Functions
+      allow delete: if false;
     }
 
-    // Trial history: authenticated users can read and create
+    // ════════════════════════════════════════════
+    // TRIAL HISTORY (anti-abuse)
+    // ════════════════════════════════════════════
     match /trialHistory/{docId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+
+      // READ: only via Cloud Functions (checkTrialEligibility)
+      // No client should enumerate trial history
+      allow read: if false;
+
+      // CREATE: during registration
+      allow create: if isAuth();
+
+      // Immutable — no update/delete
+      allow update, delete: if false;
     }
 
-    // FCM tokens: authenticated users can manage
+    // ════════════════════════════════════════════
+    // FCM TOKENS
+    // ════════════════════════════════════════════
     match /fcmTokens/{tokenId} {
-      allow read, write: if request.auth != null;
+
+      // READ: only own tokens
+      allow read: if isAuth()
+        && resource.data.userId == request.auth.uid;
+
+      // CREATE: only for yourself
+      allow create: if isAuth()
+        && request.resource.data.userId == request.auth.uid;
+
+      // UPDATE: only own tokens (token refresh)
+      allow update: if isAuth()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
+
+      // DELETE: only own tokens (logout cleanup)
+      allow delete: if isAuth()
+        && resource.data.userId == request.auth.uid;
     }
   }
 }

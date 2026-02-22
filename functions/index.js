@@ -216,6 +216,75 @@ exports.deleteUserAccount = onCall({region:"europe-west1"}, async(req)=>{
   return{success:true};
 });
 
+// ═══════════════════════════════════════════
+// SUBSCRIPTION ACTIVATION (server-side only)
+// ═══════════════════════════════════════════
+const PLANS_SERVER = {
+  starter: { name:"Starter", price:0, yearPrice:0 },
+  professional: { name:"Professional", price:89, yearPrice:Math.round(89*12*0.85) },
+  enterprise: { name:"Enterprise", price:159, yearPrice:Math.round(159*12*0.85) },
+  groep: { name:"Groepslicentie", price:129, yearPrice:Math.round(129*12*0.85) },
+};
+
+exports.activateSubscription = onCall({region:"europe-west1"}, async(req)=>{
+  if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
+  const{planId,method,billing}=req.data;
+  if(!planId||!method||!billing) throw new HttpsError("invalid-argument","planId, method en billing zijn vereist");
+  const planInfo=PLANS_SERVER[planId];
+  if(!planInfo) throw new HttpsError("invalid-argument","Ongeldig plan: "+planId);
+  if(!["month","year"].includes(billing)) throw new HttpsError("invalid-argument","Ongeldige billing periode");
+  if(!["paypal","bank"].includes(method)) throw new HttpsError("invalid-argument","Ongeldige betaalmethode");
+  // Verify caller is admin of their org
+  const userDoc=await db.collection("users").doc(req.auth.uid).get();
+  if(!userDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
+  const userData=userDoc.data();
+  if(userData.role!=="admin") throw new HttpsError("permission-denied","Alleen admins kunnen abonnementen wijzigen");
+  const orgId=userData.orgId;
+  if(!orgId) throw new HttpsError("failed-precondition","Geen organisatie gevonden");
+  // Calculate expiration
+  const now=new Date();
+  const expiresAt=new Date(now);
+  if(billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
+  // Update subscription
+  await db.collection("subscriptions").doc(orgId).update({
+    plan:planId, status:"active", billing,
+    expiresAt:admin.firestore.Timestamp.fromDate(expiresAt),
+    activatedAt:admin.firestore.Timestamp.fromDate(now),
+    method, updatedAt:admin.firestore.FieldValue.serverTimestamp(),
+  });
+  // Create invoice
+  const price=billing==="year"?planInfo.yearPrice:planInfo.price;
+  await db.collection("organizations").doc(orgId).collection("invoices").doc().set({
+    plan:planInfo.name, amount:price, billing, method,
+    status:"betaald", date:now.toISOString(),
+    createdAt:admin.firestore.FieldValue.serverTimestamp(),
+  });
+  console.log(`✅ Subscription activated: ${planInfo.name} (${billing}) for org ${orgId} via ${method}`);
+  return{success:true, plan:planId, status:"active", billing, expiresAt:expiresAt.toISOString(), activatedAt:now.toISOString()};
+});
+
+// ═══════════════════════════════════════════
+// SUPER ADMIN PROFILE (server-side only)
+// ═══════════════════════════════════════════
+const SUPER_ADMINS_SERVER = ["tigrealata@hotmail.com","info@techmeld.eu"];
+
+exports.createSuperAdminProfile = onCall({region:"europe-west1"}, async(req)=>{
+  if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
+  const email=req.auth.token.email;
+  if(!email||!SUPER_ADMINS_SERVER.includes(email)){
+    throw new HttpsError("permission-denied","Niet geautoriseerd als super admin");
+  }
+  const{name}=req.data;
+  if(!name) throw new HttpsError("invalid-argument","Naam is vereist");
+  await db.collection("users").doc(req.auth.uid).set({
+    name, email, role:"superadmin", orgId:null,
+    avatar:name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
+    createdAt:admin.firestore.FieldValue.serverTimestamp(),
+  });
+  console.log(`✅ Super admin profile created: ${email}`);
+  return{success:true};
+});
+
 exports.deleteOrganization = onCall({region:"europe-west1"}, async(req)=>{
   const{orgId}=req.data;
   if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
