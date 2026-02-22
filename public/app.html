@@ -6,7 +6,7 @@
   <script>
   // Force service worker update and cache clear on version change
   (function(){
-    var APP_VERSION="20260222c";
+    var APP_VERSION="20260222d";
     var stored=localStorage.getItem("tm_v");
     if(stored!==APP_VERSION){
       localStorage.setItem("tm_v",APP_VERSION);
@@ -1527,7 +1527,10 @@ const Building=({org,onUpd,onNotify,sub,role})=>{
         <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:28,height:28,borderRadius:6,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.accent}}>{fl.nr}</div><div><div style={{fontSize:13,fontWeight:600}}>{fl.name}</div><div style={{fontSize:10,color:C.dim}}>{rs.length} ruimtes</div></div></div>
         {canEdit&&<Btn onClick={()=>onUpd({...org,floors:org.floors.filter(f=>f.id!==fl.id),rooms:org.rooms.filter(r=>r.fId!==fl.id)})} v="danger" sm><Icon name="delete" size={13}/></Btn>}
       </div>
-      {rs.length>0&&<div style={{padding:"8px 14px",display:"flex",flexWrap:"wrap",gap:4}}>{rs.map(room=><div key={room.id} style={{padding:"4px 8px",borderRadius:5,border:"1px solid "+C.border,background:"#f8fafc",display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11}}>{room.name}</span><span style={{fontSize:8,color:C.dim,textTransform:"uppercase",background:C.accentBg,padding:"1px 4px",borderRadius:2}}>{rt[room.t]||room.t}</span>{canEdit&&<button onClick={()=>onUpd({...org,rooms:org.rooms.filter(r=>r.id!==room.id)})} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><Icon name="close" size={10} color={C.dim}/></button>}</div>)}</div>}
+      {rs.length>0&&(canEdit
+        ?<div style={{padding:"8px 14px",display:"flex",flexWrap:"wrap",gap:4}}>{rs.map(room=><div key={room.id} style={{padding:"4px 8px",borderRadius:5,border:"1px solid "+C.border,background:"#f8fafc",display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11}}>{room.name}</span><span style={{fontSize:8,color:C.dim,textTransform:"uppercase",background:C.accentBg,padding:"1px 4px",borderRadius:2}}>{rt[room.t]||room.t}</span><button onClick={()=>onUpd({...org,rooms:org.rooms.filter(r=>r.id!==room.id)})} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><Icon name="close" size={10} color={C.dim}/></button></div>)}</div>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:1,background:C.border}}>{rs.map(room=><div key={room.id} style={{padding:"10px 14px",background:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}><span style={{fontSize:13,fontWeight:500}}>{room.name}</span><span style={{fontSize:9,color:C.accent,fontWeight:600,textTransform:"uppercase",background:C.accentBg,padding:"2px 6px",borderRadius:3,whiteSpace:"nowrap"}}>{rt[room.t]||room.t}</span></div>)}</div>
+      )}
     </div>})}
   </div>;
 };
