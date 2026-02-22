@@ -314,7 +314,7 @@ exports.createPayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIEN
   return{orderId:ppOrder.id,approveUrl:approveLink.href};
 });
 
-exports.capturePayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIENT_ID","PAYPAL_CLIENT_SECRET"]}, async(req)=>{
+exports.capturePayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIENT_ID","PAYPAL_CLIENT_SECRET","EMAIL_PASS"]}, async(req)=>{
   if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
   const{orderId}=req.data;
   if(!orderId) throw new HttpsError("invalid-argument","orderId is vereist");
@@ -375,6 +375,35 @@ exports.capturePayPalOrder = onCall({region:"europe-west1",secrets:["PAYPAL_CLIE
     status:"COMPLETED",capturedAt:admin.firestore.FieldValue.serverTimestamp(),
     transactionId:capture.id,
   });
+  // Send invoice email to admin
+  try{
+    const userDoc=await db.collection("users").doc(req.auth.uid).get();
+    const orgDoc=await db.collection("organizations").doc(orgId).get();
+    const user=userDoc.exists?userDoc.data():{};
+    const org=orgDoc.exists?orgDoc.data():{};
+    if(user.email){
+      const invoiceNr="TM-"+now.getFullYear()+"-"+String(Math.floor(Math.random()*9999)).padStart(4,"0");
+      const klantNr="KL-"+String(Math.floor(Math.random()*9999)).padStart(4,"0");
+      const orgName=org.name||"Uw organisatie";
+      const addr=org.address||"";
+      const pc=[org.postcode,org.city].filter(Boolean).join(" ");
+      const btw=org.btwNummer||"";
+      const desc="TechMeld "+planInfo.name+" — "+(orderData.billing==="year"?"jaarabonnement (15% korting)":"maandabonnement");
+      const btwAmt=(basePrice*0.21).toFixed(2).replace(".",",");
+      const totAmt=(basePrice*1.21).toFixed(2).replace(".",",");
+      const baseAmt="€"+basePrice;
+      const dateStr=now.toLocaleDateString("nl-BE");
+      const invoiceHtml=`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:24px;font-family:Arial,sans-serif;color:#1e293b;font-size:13px}h1{font-size:22px;color:#2563eb;margin:0}table{width:100%;border-collapse:collapse}th,td{padding:8px 0;text-align:left}th{font-size:10px;text-transform:uppercase;color:#94a3b8;border-bottom:2px solid #e2e8f0}td{border-bottom:1px solid #e2e8f0}.right{text-align:right}.bold{font-weight:700}.sub{color:#64748b}.dim{color:#94a3b8;font-size:10px}.total td{font-size:15px;font-weight:800;border-bottom:none}.accent{color:#2563eb}.paid{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;color:#16a34a;font-weight:600;margin:14px 0}</style></head><body>`+
+        `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px"><div><h1>TechMeld™</h1><div class="sub" style="font-size:11px;margin-top:2px">Technische Dienst Management</div></div><div style="text-align:right"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">FACTUUR</div><div class="sub" style="margin-top:2px">${invoiceNr}</div><div class="dim">${dateStr}</div></div></div>`+
+        `<div style="display:flex;justify-content:space-between;margin-bottom:18px"><div><div class="dim" style="text-transform:uppercase;margin-bottom:3px">Van</div><div class="bold">TechMeld</div><div class="sub">Genk, België</div><div class="sub">BTW: BE0XXX.XXX.XXX</div><div class="sub">info@techmeld.eu</div></div><div style="text-align:right"><div class="dim" style="text-transform:uppercase;margin-bottom:3px">Aan</div><div class="bold">${orgName}</div>${addr?`<div class="sub">${addr}</div>`:""}${pc?`<div class="sub">${pc}</div>`:""}${btw?`<div class="sub">BTW: ${btw}</div>`:""}<div class="sub">Klantnummer: ${klantNr}</div></div></div>`+
+        `<table><thead><tr><th>Omschrijving</th><th class="right">Bedrag</th></tr></thead><tbody><tr><td>${desc}</td><td class="right bold">${baseAmt}</td></tr><tr><td class="sub">BTW (21%)</td><td class="right sub">€${btwAmt}</td></tr><tr class="total"><td>Totaal</td><td class="right accent">€${totAmt}</td></tr></tbody></table>`+
+        `<div class="paid">✓ Betaald via PayPal — Transactie: ${capture.id}</div>`+
+        `<div class="dim" style="border-top:1px solid #e2e8f0;padding-top:10px;line-height:1.5"><strong>TechMeld</strong> — Bijberoep · Genk, België · BTW: BE0XXX.XXX.XXX<br>Vragen: info@techmeld.eu · © ${now.getFullYear()} TechMeld™</div>`+
+        `</body></html>`;
+      await getTransporter().sendMail({from:FROM,to:user.email,subject:`Factuur TechMeld — ${planInfo.name}`,html:invoiceHtml});
+      console.log(`✅ Invoice email sent to ${user.email} for order ${orderId}`);
+    }
+  }catch(emailErr){console.error("Invoice email error (non-blocking):",emailErr)}
   console.log(`✅ PayPal payment captured: ${orderId} → ${planInfo.name} (${orderData.billing}) for org ${orgId}`);
   return{success:true,plan:orderData.planId,status:"active",billing:orderData.billing,expiresAt:expiresAt.toISOString(),activatedAt:now.toISOString()};
 });
