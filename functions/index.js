@@ -47,6 +47,19 @@ async function requireSuperAdmin(auth) {
   return userData;
 }
 
+async function requireActiveSub(auth, orgId) {
+  if (!orgId) return; // super admin without org
+  const userDoc = await db.collection("users").doc(auth.uid).get();
+  if (userDoc.exists && userDoc.data().role === "superadmin") return; // super admins bypass
+  const subDoc = await db.collection("subscriptions").doc(orgId).get();
+  if (!subDoc.exists) throw new HttpsError("failed-precondition", "Geen abonnement gevonden");
+  const sub = subDoc.data();
+  const now = new Date();
+  if (sub.status === "active" && sub.expiresAt && sub.expiresAt.toDate() > now) return;
+  if (sub.status === "trial" && sub.trialEnd && sub.trialEnd.toDate() > now) return;
+  throw new HttpsError("failed-precondition", "Uw abonnement of proefperiode is verlopen. Verleng uw abonnement om door te gaan.");
+}
+
 async function auditLog(action, actorUid, details){
   try{
     await db.collection("auditLog").add({
@@ -233,6 +246,7 @@ exports.inviteUser = onCall({region:"europe-west1",secrets:["EMAIL_PASS"],maxIns
   const allowedRoles=["admin","technician","reporter"];
   if(role&&!allowedRoles.includes(role))throw new HttpsError("invalid-argument","Ongeldig rol");
   await requireAdminOfOrg(req.auth, orgId);
+  await requireActiveSub(req.auth, orgId);
   let ur;
   try{ur=await admin.auth().createUser({email,displayName:name});}
   catch(e){if(e.code==="auth/email-already-exists")ur=await admin.auth().getUserByEmail(email);else throw new HttpsError("internal",e.message);}
@@ -269,6 +283,7 @@ exports.updateUserRole = onCall({region:"europe-west1",maxInstances:10}, async(r
   const targetDoc = await db.collection("users").doc(userId).get();
   if(!targetDoc.exists) throw new HttpsError("not-found","Gebruiker niet gevonden");
   await requireAdminOfOrg(req.auth, targetDoc.data().orgId);
+  await requireActiveSub(req.auth, targetDoc.data().orgId);
   const oldRole=targetDoc.data().role;
   await db.collection("users").doc(userId).update({role,perms:perms||[]});
   await auditLog("updateUserRole",req.auth.uid,{targetUserId:userId,oldRole,newRole:role,orgId:targetDoc.data().orgId});

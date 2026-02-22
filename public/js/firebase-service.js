@@ -220,8 +220,19 @@ var DB = {
       name, email, role:"admin", orgId: orgRef.id,
       avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
       createdAt: _serverTimestamp(),
+      tosAcceptedAt: _serverTimestamp(),
+      tosVersion: "2026-02-22",
     });
-    // Create seed meldingen (user profile must exist before this for security rules)
+    // Create subscription BEFORE seed meldingen (rules check hasActiveSub)
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + 14);
+    await db.collection('subscriptions').doc(orgRef.id).set({
+      plan:"starter", status:"trial",
+      trialEnd: _fromDate(trialEnd),
+      orgId: orgRef.id,
+      createdAt: _serverTimestamp(),
+    });
+    // Create seed meldingen (user profile + subscription must exist for security rules)
     const meldingenRef = db.collection('organizations').doc(orgRef.id).collection('meldingen');
     const now = new Date();
     await Promise.all([
@@ -247,15 +258,6 @@ var DB = {
         createdAt: _fromDate(new Date(now.getTime() - 172800000)),
       }),
     ]);
-    // Create subscription — Starter 14-day trial
-    const trialEnd = new Date();
-    trialEnd.setDate(trialEnd.getDate() + 14);
-    await db.collection('subscriptions').doc(orgRef.id).set({
-      plan:"starter", status:"trial",
-      trialEnd: _fromDate(trialEnd),
-      orgId: orgRef.id,
-      createdAt: _serverTimestamp(),
-    });
     // Save trial history for anti-abuse
     const emailKey = email.toLowerCase().replace(/[.#$/\[\]]/g,'_');
     await db.collection('trialHistory').doc(emailKey).set({

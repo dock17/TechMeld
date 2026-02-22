@@ -39,6 +39,16 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/organizations/$(orgId)).data;
     }
 
+    function subData(orgId) {
+      return get(/databases/$(database)/documents/subscriptions/$(orgId)).data;
+    }
+
+    // Check if org has an active (non-expired) subscription
+    function hasActiveSub(orgId) {
+      return (subData(orgId).status == "active" && subData(orgId).expiresAt > request.time)
+        || (subData(orgId).status == "trial" && subData(orgId).trialEnd > request.time);
+    }
+
     // Check if user's org and target org share the same groepId
     // Used for Groepslicentie cross-org access
     function sameGroep(targetOrgId) {
@@ -132,12 +142,13 @@ service cloud.firestore {
           || sameGroep(orgId)
         );
 
-        // CREATE: only org members (reporters, technicians, admins)
-        allow create: if isAuth() && isMemberOf(orgId);
+        // CREATE: only org members with active subscription
+        allow create: if isAuth() && isMemberOf(orgId)
+          && (hasActiveSub(orgId) || isSuperAdmin());
 
-        // UPDATE: org members (status changes, comments, assignment)
+        // UPDATE: org members with active subscription
         allow update: if isAuth() && (
-          isMemberOf(orgId)
+          (isMemberOf(orgId) && hasActiveSub(orgId))
           || isSuperAdmin()
         );
 
