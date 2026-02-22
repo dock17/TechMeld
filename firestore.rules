@@ -237,6 +237,14 @@ service cloud.firestore {
     }
 
     // ════════════════════════════════════════════
+    // CONFIG (super admin list, etc.)
+    // ════════════════════════════════════════════
+    match /config/{docId} {
+      allow read: if isAuth() && isSuperAdmin();
+      allow write: if false; // Solo via Cloud Functions o Console
+    }
+
+    // ════════════════════════════════════════════
     // FCM TOKENS
     // ════════════════════════════════════════════
     match /fcmTokens/{tokenId} {

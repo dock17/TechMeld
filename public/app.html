@@ -45,12 +45,12 @@
   <!-- reCAPTCHA Enterprise -->
   <script src="https://www.google.com/recaptcha/enterprise.js?render=6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0"></script>
   <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js" integrity="sha384-4gq9w/AGf72FXdNQ3Kn3EqWP7633NbCMjpYHt8YCZyXf23o2opcuAr4cif41tLrC" crossorigin="anonymous"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js" integrity="sha384-xtdq4MQqPj1dB5DQsuw9O7dh4kHhMP/Wp5u8O1jiaWiou13ZfJIgiccjtVK2pBhL" crossorigin="anonymous"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js" integrity="sha384-Qgqc/HETq5lqJnRDqWnV1AZGw3pgMYNUVaqLLN1W/55XuWK94epwbCQrOvdoh1Zo" crossorigin="anonymous"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js" integrity="sha384-yTXgVdKIoM5XuQZ1AGw9zFUgmu45OeHYpGDbbWtXHu/qOJxneVAXbw5Rh5CGninE" crossorigin="anonymous"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js" integrity="sha384-F8rlC59erkC9PkWp7FIVgQHXhGqSCrhQS1i1zIWYJORAsFGQZE+do+ct+jlO2+0z" crossorigin="anonymous"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-functions-compat.js" integrity="sha384-VZ3ffKEdaGenwt9PHb3mi4tIYhUneHNLCvFU20aZ92xtmgjTm+SFpHHrvVmrr4c9" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore-compat.js" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-storage-compat.js" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-messaging-compat.js" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.9.0/firebase-functions-compat.js" crossorigin="anonymous"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body,#root{height:100%;width:100%;margin:0}
@@ -196,7 +196,18 @@ const sanitize=(obj)=>{
   const out={};for(const k of Object.keys(obj))out[k]=sanitize(obj[k]);return out;
 };
 const escHtml=(s)=>s?String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"):"";
+const _FieldValue = firebase.firestore.FieldValue;
+const _Timestamp = firebase.firestore.Timestamp;
+const _serverTimestamp = () => _FieldValue.serverTimestamp();
+const _fromDate = (d) => _Timestamp.fromDate(d);
+const _call = async (name, data) => {
+  if (!functions) throw new Error("Cloud Functions niet beschikbaar");
+  return await functions.httpsCallable(name)(data || {});
+};
 const DB = {
+  serverTimestamp: _serverTimestamp,
+  fromDate: _fromDate,
+  call: _call,
   // AUTH
   async register(email, password, name, orgName, orgType) {
     if(!firebaseReady) return {uid:"demo-"+Date.now(), email, displayName:name};
@@ -204,7 +215,7 @@ const DB = {
     await cred.user.updateProfile({displayName: name});
     // Super admin — no org, no trial (profile created server-side)
     try{
-      await functions.httpsCallable('createSuperAdminProfile')({name});
+      await _call('createSuperAdminProfile', {name});
       return cred.user;
     }catch(e){
       // Not a super admin — continue with normal registration
@@ -248,14 +259,14 @@ const DB = {
         {id:"f3",name:"2e Verdieping",nr:2,bId:"b1"},
       ],
       rooms: roomsByType[orgType] || roomsByType.care,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAt: _serverTimestamp(),
     };
     await orgRef.set(orgData);
     // Create user profile doc FIRST (required by Firestore rules for isMemberOf check)
     await db.collection('users').doc(cred.user.uid).set({
       name, email, role:"admin", orgId: orgRef.id,
       avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAt: _serverTimestamp(),
     });
     // Create seed meldingen (user profile must exist before this for security rules)
     const meldingenRef = db.collection('organizations').doc(orgRef.id).collection('meldingen');
@@ -266,21 +277,21 @@ const DB = {
         status:"open", prio:"medium", cat:"Sanitair",
         room:"r1", floor:"f1", building:"b1",
         by: cred.user.uid, to: null,
-        createdAt: firebase.firestore.Timestamp.fromDate(now),
+        createdAt: _fromDate(now),
       }),
       meldingenRef.add({
         title:"Verlichting flikkert", desc:"Verlichting in de gang flikkert onregelmatig.",
         status:"in_progress", prio:"high", cat:"Elektriciteit",
         room:"r3", floor:"f2", building:"b1",
         by: cred.user.uid, to: null,
-        createdAt: firebase.firestore.Timestamp.fromDate(new Date(now.getTime() - 86400000)),
+        createdAt: _fromDate(new Date(now.getTime() - 86400000)),
       }),
       meldingenRef.add({
         title:"Deur sluit niet goed", desc:"Deur van berging sluit niet goed meer.",
         status:"resolved", prio:"low", cat:"Deur/Raam",
         room:"r5", floor:"f3", building:"b1",
         by: cred.user.uid, to: null,
-        createdAt: firebase.firestore.Timestamp.fromDate(new Date(now.getTime() - 172800000)),
+        createdAt: _fromDate(new Date(now.getTime() - 172800000)),
       }),
     ]);
     // Create subscription — Starter 14-day trial
@@ -288,9 +299,9 @@ const DB = {
     trialEnd.setDate(trialEnd.getDate() + 14);
     await db.collection('subscriptions').doc(orgRef.id).set({
       plan:"starter", status:"trial",
-      trialEnd: firebase.firestore.Timestamp.fromDate(trialEnd),
+      trialEnd: _fromDate(trialEnd),
       orgId: orgRef.id,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAt: _serverTimestamp(),
     });
     // Save trial history for anti-abuse
     const emailKey = email.toLowerCase().replace(/[.#$/\[\]]/g,'_');
@@ -298,7 +309,7 @@ const DB = {
       email: email.toLowerCase(),
       orgName: orgName,
       orgId: orgRef.id,
-      registeredAt: firebase.firestore.FieldValue.serverTimestamp()
+      registeredAt: _serverTimestamp()
     });
     return cred.user;
   },
@@ -321,7 +332,7 @@ const DB = {
   async saveFCMToken(userId,orgId,token){
     if(!firebaseReady||!token)return;
     var id=userId+"_"+btoa(token).slice(0,8);
-    await db.collection('fcmTokens').doc(id).set({userId:userId,orgId:orgId,token:token,device:navigator.userAgent.slice(0,80),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    await db.collection('fcmTokens').doc(id).set({userId:userId,orgId:orgId,token:token,device:navigator.userAgent.slice(0,80),updatedAt:_serverTimestamp()},{merge:true});
   },
 
   async getOrgFCMTokens(orgId,excludeUserId){
@@ -334,7 +345,7 @@ const DB = {
   async addMelding(orgId, melding) {
     if(!firebaseReady) return melding;
     const ref = db.collection('organizations').doc(orgId).collection('meldingen').doc();
-    const data = {...melding, id: ref.id, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()};
+    const data = {...melding, id: ref.id, createdAt: _serverTimestamp(), updatedAt: _serverTimestamp()};
     await ref.set(data);
     return {...melding, id: ref.id};
   },
@@ -342,7 +353,7 @@ const DB = {
   async updateMelding(orgId, melding) {
     if(!firebaseReady) return;
     await db.collection('organizations').doc(orgId).collection('meldingen').doc(melding.id).update({
-      ...melding, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      ...melding, updatedAt: _serverTimestamp()
     });
   },
 
@@ -361,7 +372,7 @@ const DB = {
   async addUser(orgId, userData) {
     if(!firebaseReady) return userData;
     const ref = db.collection('users').doc();
-    await ref.set({...userData, orgId, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+    await ref.set({...userData, orgId, createdAt: _serverTimestamp()});
     return {...userData, id: ref.id};
   },
 
@@ -379,7 +390,7 @@ const DB = {
   async updateSubscription(orgId, data) {
     if(!firebaseReady) return;
     await db.collection('subscriptions').doc(orgId).update({
-      ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      ...data, updatedAt: _serverTimestamp()
     });
   },
 
@@ -387,7 +398,7 @@ const DB = {
   async addInvoice(orgId, invoice) {
     if(!firebaseReady) return invoice;
     const ref = db.collection('organizations').doc(orgId).collection('invoices').doc();
-    await ref.set({...invoice, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+    await ref.set({...invoice, createdAt: _serverTimestamp()});
     return {...invoice, id: ref.id};
   },
 
@@ -458,7 +469,7 @@ const DB = {
       buildings:[{id:"b1",name:"Hoofdgebouw"}],
       floors:[{id:"f1",name:"Begane Grond",nr:0,bId:"b1"}],
       rooms:[],
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAt: _serverTimestamp(),
     });
     return {id:ref.id, name, type, groepId};
   },
@@ -547,6 +558,41 @@ const Btn=({children,onClick,v="primary",sm,disabled,sx={}})=>{
   return <button onClick={onClick} disabled={disabled} style={{...s,...vs[v],...sx}}>{children}</button>;
 };
 const Tag=({children,c="#2563eb",bg="#eff6ff"})=><span style={{padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:bg,color:c}}>{children}</span>;
+const ReauthModal=({show,title,message,onConfirm,onCancel})=>{
+  const[pw,setPw]=useState("");const[err,setErr]=useState("");const[busy,setBusy]=useState(false);
+  useEffect(()=>{if(show){setPw("");setErr("");setBusy(false)}},[show]);
+  if(!show)return null;
+  const handleConfirm=async()=>{
+    if(!pw){setErr("Voer uw wachtwoord in");return}
+    setBusy(true);setErr("");
+    try{
+      const user=auth.currentUser;
+      const cred=firebase.auth.EmailAuthProvider.credential(user.email,pw);
+      await user.reauthenticateWithCredential(cred);
+      await user.getIdToken(true);
+      await onConfirm();
+    }catch(e){
+      setErr(e.code==="auth/wrong-password"||e.code==="auth/invalid-credential"?"Onjuist wachtwoord":"Verificatie mislukt: "+(e.message||"Probeer opnieuw"));
+    }
+    setBusy(false);
+  };
+  return <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:400,width:"100%",boxShadow:"0 8px 30px rgba(0,0,0,.15)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <div style={{width:32,height:32,borderRadius:8,background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="lock" size={18} color="#dc2626"/></div>
+        <div style={{fontSize:16,fontWeight:700,color:"#dc2626"}}>{title||"Herverificatie vereist"}</div>
+      </div>
+      <p style={{fontSize:13,color:C.sub,marginBottom:14}}>{message||"Voer uw wachtwoord in om deze actie te bevestigen."}</p>
+      <div style={{marginBottom:12}}><Inp label="Wachtwoord" type="password" value={pw} onChange={setPw} placeholder="Uw wachtwoord"/></div>
+      {err&&<div style={{fontSize:12,color:"#dc2626",marginBottom:10,padding:"6px 10px",background:"#fef2f2",borderRadius:6}}>{err}</div>}
+      <div style={{display:"flex",gap:10}}>
+        <Btn onClick={handleConfirm} v="danger" disabled={busy} sx={{flex:1}}>{busy?"Bezig...":"Bevestigen"}</Btn>
+        <Btn onClick={onCancel} v="secondary" disabled={busy} sx={{flex:1}}>Annuleren</Btn>
+      </div>
+    </div>
+  </div>;
+};
+
 const Toast=({items,onDismiss})=>items.length?<div style={{position:"fixed",top:12,right:12,zIndex:9999,display:"flex",flexDirection:"column",gap:6,maxWidth:340}}>
   {items.map(n=><div key={n.id} style={{background:n.type==="success"?"#f0fdf4":n.type==="error"?"#fef2f2":"#eff6ff",border:"1px solid "+(n.type==="success"?"#bbf7d0":n.type==="error"?"#fecaca":"#bfdbfe"),borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,animation:"slideIn .3s",boxShadow:"0 4px 16px rgba(0,0,0,.06)"}}>
     <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13,color:C.text}}>{n.title}</div>{n.msg&&<div style={{fontSize:11,color:C.sub,marginTop:1}}>{n.msg}</div>}</div>
@@ -654,8 +700,7 @@ const Pricing=({sub,org,onSelect,onBack,onNotify})=>{
     if(pay==="paypal"){
       setBusy(true);
       try{
-        const createOrder=functions.httpsCallable("createPayPalOrder");
-        const result=await createOrder({planId:sel,billing});
+        const result=await _call("createPayPalOrder", {planId:sel,billing});
         // Store order context for return
         try{sessionStorage.setItem("tm_paypal_order",JSON.stringify({orderId:result.data.orderId,planId:sel,billing}))}catch(e){}
         // Redirect to PayPal in same tab
@@ -706,8 +751,7 @@ const Pricing=({sub,org,onSelect,onBack,onNotify})=>{
   const handleEmailInvoice=async(invoiceNr,klantNr,method)=>{
     try{
       const html=buildInvoiceHtml(invoiceNr,klantNr,method);
-      const sendInvoice=functions.httpsCallable("sendInvoiceEmail");
-      await sendInvoice({invoiceHtml:html,planName:plan.name});
+      await _call("sendInvoiceEmail", {invoiceHtml:html,planName:plan.name});
       onNotify({title:"Factuur verstuurd per e-mail",type:"success"});
     }catch(e){
       console.error("Email invoice error:",e);
@@ -1689,6 +1733,7 @@ const FloorPlans=({org,onNotify,orgId})=>{
 const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
   const[show,setShow]=useState(false);const[nu,setNu]=useState({name:"",email:"",role:"reporter"});
   const[editPerms,setEditPerms]=useState(null);const[inviting,setInviting]=useState(false);const[deleting,setDeleting]=useState(null);
+  const[reauthAction,setReauthAction]=useState(null);
   const rl={admin:"Beheerder",technician:"Technicus",reporter:"Melder"};const rc={admin:"#dc2626",technician:"#d97706",reporter:"#2563eb"};
   const plan=PLANS.find(p=>p.id===(sub?.plan||"starter"))||PLANS[0];
   var getUserPerms=function(u){return u.perms||DEFAULT_PERMS[u.role]||DEFAULT_PERMS.reporter};
@@ -1699,21 +1744,21 @@ const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
     if(!np.includes("dashboard"))np=["dashboard",...np];
     onUpd(users.map(function(x){return x.id===userId?{...x,perms:np}:x}));
   };
-  var doDelete=async function(userId,userName,userEmail){
-    if(!confirm("Weet je zeker dat je "+userName+" wilt verwijderen?"))return;
-    setDeleting(userId);
-    try{
-      if(functions){
-        var fn=functions.httpsCallable("deleteUserAccount");
-        await fn({userId:userId,userEmail:userEmail});
+  var doDelete=function(userId,userName,userEmail){
+    setReauthAction({title:"Gebruiker verwijderen",message:"Voer uw wachtwoord in om "+userName+" te verwijderen.",action:async function(){
+      setDeleting(userId);
+      try{
+        if(functions){
+          await _call("deleteUserAccount", {userId:userId,userEmail:userEmail});
+        }
+        onUpd(users.filter(function(x){return x.id!==userId}));
+        onNotify({title:"Verwijderd!",msg:userName+" is volledig verwijderd.",type:"success"});
+      }catch(e){
+        console.error("Delete error:",e);
+        onNotify({title:"Fout bij verwijderen",msg:e.message||"Probeer opnieuw",type:"error"});
       }
-      onUpd(users.filter(function(x){return x.id!==userId}));
-      onNotify({title:"Verwijderd!",msg:userName+" is volledig verwijderd.",type:"success"});
-    }catch(e){
-      console.error("Delete error:",e);
-      onNotify({title:"Fout bij verwijderen",msg:e.message||"Probeer opnieuw",type:"error"});
-    }
-    setDeleting(null);
+      setDeleting(null);setReauthAction(null);
+    }});
   };
   var doInvite=async function(){
     if(!nu.name||!nu.email)return onNotify({title:"Vul naam en email in",type:"error"});
@@ -1725,8 +1770,7 @@ const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
     setInviting(true);
     try{
       if(functions){
-        var inviteUser=functions.httpsCallable("inviteUser");
-        var result=await inviteUser({name:nu.name,email:nu.email,role:nu.role,orgId:orgId});
+        var result=await _call("inviteUser", {name:nu.name,email:nu.email,role:nu.role,orgId:orgId});
         onNotify({title:"Uitgenodigd!",msg:nu.name+" ontvangt een e-mail om wachtwoord in te stellen.",type:"success"});
       }else{
         // Fallback demo mode
@@ -1753,7 +1797,7 @@ const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
         <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,"+rc[u.role]+"40,"+rc[u.role]+"20)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:rc[u.role]}}>{u.av}</div>
           <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{u.name}{u.id===cur.id&&<span style={{fontSize:10,color:C.accent}}> (u)</span>}</div><div style={{fontSize:11,color:C.dim}}>{u.email}</div></div>
-          <select value={u.role} onChange={async e=>{var newRole=e.target.value;try{var fn=functions.httpsCallable("updateUserRole");await fn({userId:u.id,role:newRole,perms:DEFAULT_PERMS[newRole]});onNotify({title:"Rol bijgewerkt",type:"success"})}catch(err){onNotify({title:"Fout bij rol wijzigen",type:"error"})}}} disabled={u.id===cur.id} style={{padding:"5px 8px",borderRadius:5,border:"1px solid "+C.border,background:C.card,fontSize:11,cursor:u.id===cur.id?"not-allowed":"pointer"}}>{Object.entries(rl).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
+          <select value={u.role} onChange={e=>{var newRole=e.target.value;setReauthAction({title:"Rol wijzigen",message:"Voer uw wachtwoord in om de rol van "+u.name+" te wijzigen naar "+rl[newRole]+".",action:async function(){try{await _call("updateUserRole", {userId:u.id,role:newRole,perms:DEFAULT_PERMS[newRole]});onNotify({title:"Rol bijgewerkt",type:"success"})}catch(err){onNotify({title:"Fout bij rol wijzigen",msg:err.message||"Probeer opnieuw",type:"error"})}setReauthAction(null)}})}} disabled={u.id===cur.id} style={{padding:"5px 8px",borderRadius:5,border:"1px solid "+C.border,background:C.card,fontSize:11,cursor:u.id===cur.id?"not-allowed":"pointer"}}>{Object.entries(rl).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
           {cur.role==="admin"&&u.id!==cur.id&&<button onClick={function(){setEditPerms(isEditing?null:u.id)}} style={{padding:"4px 8px",borderRadius:5,border:"1px solid "+(isEditing?C.accent:C.border),background:isEditing?C.accentBg:C.card,cursor:"pointer",fontSize:10,fontWeight:600,color:isEditing?C.accent:C.sub}}>🔑 Toegang</button>}
           {u.id!==cur.id&&<Btn onClick={function(){doDelete(u.id,u.name,u.email)}} v="danger" sm disabled={deleting===u.id}>{deleting===u.id?"...":"🗑"}</Btn>}
         </div>
@@ -1771,6 +1815,7 @@ const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
           <div style={{fontSize:10,color:C.dim,marginTop:6}}>Dashboard is altijd zichtbaar. Klik om toegang aan/uit te zetten.</div>
         </div>}
       </div>})}</div>
+    <ReauthModal show={!!reauthAction} title={reauthAction?.title} message={reauthAction?.message} onConfirm={reauthAction?.action||function(){}} onCancel={function(){setReauthAction(null)}}/>
   </div>;
 };
 
@@ -1780,6 +1825,7 @@ const Users=({users,cur,orgId,onUpd,onNotify,sub})=>{
 const AdminPanel=({curUser,onImpersonate})=>{
   const[orgs,setOrgs]=useState([]);const[allUsers,setAllUsers]=useState([]);const[subs,setSubs]=useState([]);const[trials,setTrials]=useState([]);const[loading,setLoading]=useState(true);
   const[confirm,setConfirm]=useState(null);const[search,setSearch]=useState("");const[tab,setTab]=useState("orgs");
+  const[reauthAction,setReauthAction]=useState(null);
   const[activateModal,setActivateModal]=useState(null); // {orgId, orgName, currentPlan}
   const[actPlan,setActPlan]=useState("professional");
   const[actBilling,setActBilling]=useState("month");
@@ -1794,19 +1840,25 @@ const AdminPanel=({curUser,onImpersonate})=>{
     return function(){unsubs.forEach(function(u){u()})};
   },[]);
 
-  var deleteUser=async function(userId,userEmail){
-    if(functions){var fn=functions.httpsCallable("deleteUserAccount");await fn({userId:userId,userEmail:userEmail});}
-    else{await db.collection('users').doc(userId).delete();}
+  var deleteUser=function(userId,userEmail){
     setConfirm(null);
+    setReauthAction({title:"Gebruiker verwijderen",message:"Voer uw wachtwoord in om deze gebruiker te verwijderen.",action:async function(){
+      if(functions){await _call("deleteUserAccount", {userId:userId,userEmail:userEmail});}
+      else{await db.collection('users').doc(userId).delete();}
+      setReauthAction(null);
+    }});
   };
-  var deleteOrg=async function(orgId){
-    if(functions){var fn=functions.httpsCallable("deleteOrganization");await fn({orgId:orgId});}
-    else{await db.collection('organizations').doc(orgId).delete();}
+  var deleteOrg=function(orgId){
     setConfirm(null);
+    setReauthAction({title:"Organisatie verwijderen",message:"Voer uw wachtwoord in om deze organisatie permanent te verwijderen.",action:async function(){
+      if(functions){await _call("deleteOrganization", {orgId:orgId});}
+      else{await db.collection('organizations').doc(orgId).delete();}
+      setReauthAction(null);
+    }});
   };
   var resetSub=async function(orgId,plan){
     var trialEnd=new Date();trialEnd.setDate(trialEnd.getDate()+14);
-    await db.collection('subscriptions').doc(orgId).set({plan:plan||"starter",status:"trial",trialEnd:firebase.firestore.Timestamp.fromDate(trialEnd),orgId:orgId},{merge:true});
+    await db.collection('subscriptions').doc(orgId).set({plan:plan||"starter",status:"trial",trialEnd:_fromDate(trialEnd),orgId:orgId},{merge:true});
     setConfirm(null);
   };
   var activateSub=async function(orgId,planId,billing){
@@ -1817,9 +1869,9 @@ const AdminPanel=({curUser,onImpersonate})=>{
     if(billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
     await db.collection('subscriptions').doc(orgId).set({
       plan:planId,status:"active",billing:billing,
-      expiresAt:firebase.firestore.Timestamp.fromDate(expiresAt),
-      activatedAt:firebase.firestore.Timestamp.fromDate(now),
-      method:"bank",updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      expiresAt:_fromDate(expiresAt),
+      activatedAt:_fromDate(now),
+      method:"bank",updatedAt:_serverTimestamp(),
       orgId:orgId
     },{merge:true});
     // Create invoice record
@@ -1828,7 +1880,7 @@ const AdminPanel=({curUser,onImpersonate})=>{
       plan:planInfo.name,amount:price,billing:billing,method:"bank",
       status:"betaald",date:now.toISOString(),
       activatedBy:curUser.email,
-      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+      createdAt:_serverTimestamp(),
     });
     setActivateModal(null);
   };
@@ -1943,6 +1995,7 @@ const AdminPanel=({curUser,onImpersonate})=>{
       <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{t.email}</div><div style={{fontSize:10,color:C.dim}}>{t.orgName} · {t.registeredAt?fmtDate(t.registeredAt):""}</div></div>
     </div>})}
     {trials.length===0&&<div style={{padding:20,textAlign:"center",color:C.dim}}>Geen trial historie</div>}</div>}
+    <ReauthModal show={!!reauthAction} title={reauthAction?.title} message={reauthAction?.message} onConfirm={reauthAction?.action||function(){}} onCancel={function(){setReauthAction(null)}}/>
   </div>;
 };
 
@@ -1986,8 +2039,8 @@ const Settings=({org,onUpd,onNotify,onNav})=>{
 // CAPTCHA (reCAPTCHA Enterprise)
 // ═══════════════════════════════════════════
 const RECAPTCHA_KEY="6LcmgWwsAAAAAML-J6-qC5iQDCmbfUnt09vnUOe0";
-const verifyRecaptcha=functions.httpsCallable("verifyRecaptcha");
-const checkTrialEligibility=functions.httpsCallable("checkTrialEligibility");
+const verifyRecaptcha=async(data)=>_call("verifyRecaptcha",data);
+const checkTrialEligibility=async(data)=>_call("checkTrialEligibility",data);
 const Captcha=({onVerify,verified})=>{
   const[busy,setBusy]=useState(false);const[err,setErr]=useState("");
   const verify=async()=>{
@@ -2425,8 +2478,7 @@ function App(){
     if(paypalReturn.status==="success"&&paypalReturn.orderId){
       const capture=async()=>{
         try{
-          const captureOrder=functions.httpsCallable("capturePayPalOrder");
-          const result=await captureOrder({orderId:paypalReturn.orderId});
+          const result=await _call("capturePayPalOrder", {orderId:paypalReturn.orderId});
           if(result.data.success){
             setStore(p=>({...p,sub:{...p.sub,...result.data}}));
             notify({title:"Betaling ontvangen!",msg:"Uw abonnement is geactiveerd.",type:"success"});
@@ -2482,7 +2534,7 @@ function App(){
     // Paid subscription — activated via Cloud Function (server-side validation)
     if(orgId){
       try{
-        const result=await functions.httpsCallable('activateSubscription')({planId:id,method:method||"paypal",billing:billing||"month",orgId});
+        const result=await _call('activateSubscription', {planId:id,method:method||"paypal",billing:billing||"month",orgId});
         if(result.data.success){
           setStore(p=>({...p,sub:{...p.sub,...result.data}}));
         }

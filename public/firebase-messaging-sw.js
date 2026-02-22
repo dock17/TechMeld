@@ -1,5 +1,5 @@
-importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.9.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.9.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
   apiKey: "AIzaSyDGgQBiHQVa8z8khvrIKp392mc_d8dDEJU",
@@ -29,7 +29,7 @@ messaging.onBackgroundMessage(function(payload) {
 });
 
 // Cache management
-var CACHE_NAME = 'techmeld-v6';
+var CACHE_NAME = 'techmeld-v7';
 var ASSETS = ['/manifest.json'];
 
 self.addEventListener('install', function(e) {

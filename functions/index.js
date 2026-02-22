@@ -29,6 +29,15 @@ async function requireAdminOfOrg(auth, orgId) {
   throw new HttpsError("permission-denied", "Niet geautoriseerd");
 }
 
+const MAX_AUTH_AGE_SECONDS = 300; // 5 minuti
+function requireRecentAuth(auth) {
+  if (!auth || !auth.token) throw new HttpsError("unauthenticated","Login vereist");
+  const now = Math.floor(Date.now() / 1000);
+  if (!auth.token.auth_time || (now - auth.token.auth_time) > MAX_AUTH_AGE_SECONDS) {
+    throw new HttpsError("permission-denied","Herverificatie vereist");
+  }
+}
+
 async function requireSuperAdmin(auth) {
   if (!auth) throw new HttpsError("unauthenticated", "Login vereist");
   const userDoc = await db.collection("users").doc(auth.uid).get();
@@ -229,6 +238,7 @@ const ROLE_LABELS={admin:"Beheerder",technician:"Technicus",reporter:"Melder"};
 exports.updateUserRole = onCall({region:"europe-west1"}, async(req)=>{
   const{userId,role,perms}=req.data;
   if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
+  requireRecentAuth(req.auth);
   if(!userId||!role)throw new HttpsError("invalid-argument","userId en role zijn vereist");
   const allowed=["admin","technician","reporter"];
   if(!allowed.includes(role))throw new HttpsError("invalid-argument","Ongeldig rol");
@@ -242,6 +252,7 @@ exports.updateUserRole = onCall({region:"europe-west1"}, async(req)=>{
 exports.deleteUserAccount = onCall({region:"europe-west1",maxInstances:10}, async(req)=>{
   const{userId}=req.data;
   if(!req.auth)throw new HttpsError("unauthenticated","Login vereist");
+  requireRecentAuth(req.auth);
   const targetDoc = await db.collection("users").doc(userId).get();
   if(targetDoc.exists) {
     await requireAdminOfOrg(req.auth, targetDoc.data().orgId);
@@ -488,12 +499,15 @@ exports.activateSubscription = onCall({region:"europe-west1",maxInstances:5}, as
 // ═══════════════════════════════════════════
 // SUPER ADMIN PROFILE (server-side only)
 // ═══════════════════════════════════════════
-const SUPER_ADMINS_SERVER = ["info@techmeld.eu"];
 
 exports.createSuperAdminProfile = onCall({region:"europe-west1"}, async(req)=>{
   if(!req.auth) throw new HttpsError("unauthenticated","Login vereist");
   const email=req.auth.token.email;
-  if(!email||!SUPER_ADMINS_SERVER.includes(email)){
+  if(!email) throw new HttpsError("permission-denied","Niet geautoriseerd als super admin");
+  const configDoc = await db.collection("config").doc("superadmins").get();
+  if(!configDoc.exists) throw new HttpsError("internal","Super admin configuratie niet gevonden");
+  const allowedEmails = configDoc.data().emails || [];
+  if(!allowedEmails.includes(email)){
     throw new HttpsError("permission-denied","Niet geautoriseerd als super admin");
   }
   const{name}=req.data;
@@ -509,6 +523,7 @@ exports.createSuperAdminProfile = onCall({region:"europe-west1"}, async(req)=>{
 
 exports.deleteOrganization = onCall({region:"europe-west1",maxInstances:3}, async(req)=>{
   const{orgId}=req.data;
+  requireRecentAuth(req.auth);
   await requireSuperAdmin(req.auth);
   // Delete all users in this org (Auth + Firestore)
   const usersSnap=await db.collection("users").where("orgId","==",orgId).get();
