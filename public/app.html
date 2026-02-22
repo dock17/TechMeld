@@ -449,7 +449,7 @@ const CATS=["Elektriciteit","Sanitair","Verwarming","Ventilatie","Deur/Raam","Vl
 const PAGES=[{id:"dashboard",l:"Dashboard"},{id:"meldingen",l:"Meldingen"},{id:"new",l:"Nieuwe melding"},{id:"building",l:"Gebouwen"},{id:"floorplans",l:"Plattegronden"},{id:"users",l:"Gebruikers"},{id:"rapportage",l:"Overzicht & Rapporten"},{id:"groep",l:"Groepsdashboard"},{id:"locaties",l:"Locaties"},{id:"vergelijk",l:"Vergelijking"},{id:"billing",l:"Abonnement"},{id:"settings",l:"Instellingen"}];
 const DEFAULT_PERMS={
   admin:["dashboard","meldingen","new","building","floorplans","users","rapportage","groep","locaties","vergelijk","billing","settings"],
-  technician:["dashboard","meldingen","new","building","floorplans","rapportage"],
+  technician:["dashboard","meldingen","new","building","floorplans"],
   reporter:["dashboard","meldingen","new","building"]
 };
 const PLANS=[
@@ -1440,7 +1440,7 @@ const VergelijkendeRapportage=({org,orgId,onNotify})=>{
 };
 
 const Building=({org,onUpd,onNotify,sub,role})=>{
-  const canEdit=role==="admin"||role==="technician"||role==="superadmin";
+  const canEdit=role==="admin"||role==="superadmin";
   const buildings=org.buildings||[{id:"b_default",name:"Gebouw"}];
   const[selB,setSelB]=useState(buildings[0]?.id||"");
   const[nf,setNf]=useState({name:"",nr:0});const[nr,setNr]=useState({name:"",fId:"",t:"patient"});const[sf,setSf]=useState(false);const[sr,setSr]=useState(false);const[bulkMode,setBulkMode]=useState(false);const[bulk,setBulk]=useState({from:"",to:"",prefix:"Kamer ",fId:"",t:"patient"});
