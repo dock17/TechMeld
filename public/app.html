@@ -6,7 +6,7 @@
   <script>
   // Force service worker update and cache clear on version change
   (function(){
-    var APP_VERSION="20260222i";
+    var APP_VERSION="20260222j";
     var stored=sessionStorage.getItem("tm_v");
     if(stored!==APP_VERSION){
       sessionStorage.setItem("tm_v",APP_VERSION);
@@ -58,6 +58,27 @@
 <script src="/js/firebase-service.js"></script>
 <script type="text/babel">
 const{useState,useEffect,useCallback,useMemo,useRef}=React;
+
+// Error Boundary — prevents white page on React crashes
+class ErrorBoundary extends React.Component{
+  constructor(props){super(props);this.state={hasError:false,error:null}}
+  static getDerivedStateFromError(error){return{hasError:true,error}}
+  componentDidCatch(error,info){console.error("ErrorBoundary caught:",error,info)}
+  render(){
+    if(this.state.hasError){
+      return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:32,background:"#f8fafc",fontFamily:"Inter,system-ui,sans-serif"}},
+        React.createElement("div",{style:{maxWidth:420,textAlign:"center"}},
+          React.createElement("div",{style:{width:56,height:56,borderRadius:16,background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:28}},"⚠️"),
+          React.createElement("h1",{style:{fontSize:20,fontWeight:700,color:"#1e293b",margin:"0 0 8px"}},"Er is iets misgegaan"),
+          React.createElement("p",{style:{fontSize:14,color:"#64748b",margin:"0 0 20px",lineHeight:1.6}},"De applicatie heeft een onverwachte fout ondervonden. Probeer de pagina te vernieuwen."),
+          React.createElement("button",{onClick:function(){location.reload()},style:{padding:"10px 24px",borderRadius:8,border:"none",background:"#2563eb",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}},"Pagina vernieuwen")
+        )
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const uid=()=>Math.random().toString(36).slice(2,10);
 const ts=()=>new Date().toISOString();
 const fmtDate=d=>new Date(d).toLocaleDateString("nl-BE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
@@ -2000,6 +2021,28 @@ function App(){
     return()=>unsub();
   },[]);
 
+  // Session timeout — auto-logout after 30 min inactivity
+  useEffect(()=>{
+    if(!authed)return;
+    const TIMEOUT=30*60*1000; // 30 min
+    const WARN=25*60*1000; // warn at 25 min
+    let timer=null,warnTimer=null;
+    const reset=()=>{
+      clearTimeout(timer);clearTimeout(warnTimer);
+      warnTimer=setTimeout(()=>{
+        notify({title:"Sessie verloopt",msg:"U wordt over 5 minuten uitgelogd wegens inactiviteit.",type:"warning"});
+      },WARN);
+      timer=setTimeout(()=>{
+        DB.logout().then(()=>{setAuthed(false);setOrgId(null)});
+        notify({title:"Sessie verlopen",msg:"U bent automatisch uitgelogd wegens inactiviteit.",type:"error"});
+      },TIMEOUT);
+    };
+    const events=["mousedown","keydown","touchstart","scroll"];
+    events.forEach(e=>document.addEventListener(e,reset,{passive:true}));
+    reset();
+    return()=>{clearTimeout(timer);clearTimeout(warnTimer);events.forEach(e=>document.removeEventListener(e,reset))};
+  },[authed]);
+
   // Real-time listeners for Firebase data
   useEffect(()=>{
     if(!firebaseReady||!orgId)return;
@@ -2272,7 +2315,7 @@ function App(){
     <MobileNav active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} impersonating={impersonating}/>
   </div>;
 }
-ReactDOM.render(<App/>,document.getElementById('root'));
+ReactDOM.render(<ErrorBoundary><App/></ErrorBoundary>,document.getElementById('root'));
 </script>
 </body>
 </html>
