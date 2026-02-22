@@ -201,13 +201,9 @@ const DB = {
     if(!firebaseReady) return {uid:"demo-"+Date.now(), email, displayName:name};
     const cred = await auth.createUserWithEmailAndPassword(email, password);
     await cred.user.updateProfile({displayName: name});
-    // Super admin — no org, no trial
+    // Super admin — no org, no trial (profile created server-side)
     if(SUPER_ADMINS.includes(email)){
-      await db.collection('users').doc(cred.user.uid).set({
-        name, email, role:"superadmin", orgId: null,
-        avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      await functions.httpsCallable('createSuperAdminProfile')({name});
       return cred.user;
     }
     // Create organization doc
@@ -252,7 +248,13 @@ const DB = {
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     await orgRef.set(orgData);
-    // Create seed meldingen
+    // Create user profile doc FIRST (required by Firestore rules for isMemberOf check)
+    await db.collection('users').doc(cred.user.uid).set({
+      name, email, role:"admin", orgId: orgRef.id,
+      avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    // Create seed meldingen (user profile must exist before this for security rules)
     const meldingenRef = db.collection('organizations').doc(orgRef.id).collection('meldingen');
     const now = new Date();
     await Promise.all([
@@ -278,12 +280,6 @@ const DB = {
         createdAt: firebase.firestore.Timestamp.fromDate(new Date(now.getTime() - 172800000)),
       }),
     ]);
-    // Create user profile doc
-    await db.collection('users').doc(cred.user.uid).set({
-      name, email, role:"admin", orgId: orgRef.id,
-      avatar: name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase(),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
     // Create subscription — Starter 14-day trial
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + 14);
@@ -2329,9 +2325,9 @@ function App(){
     setTimeout(()=>notify({title:"📱 "+pushMsg,msg:assigned?'"'+m.title+'" → '+assigned.name:'"'+m.title+'" → alle technici',type:PushNotify.permission==='granted'?"success":"info"}),500);
   },[notify,orgId,store.users,store.sub,store.meldingen]);
 
-  const selPlan=(id,method,billing)=>{
+  const selPlan=async(id,method,billing)=>{
     const now=new Date();
-    // Free trial for a plan (14 days)
+    // Free trial for a plan (14 days) — allowed by Firestore rules
     if(method==="trial"){
       const trialEnd=new Date(now);
       trialEnd.setDate(trialEnd.getDate()+14);
@@ -2340,17 +2336,17 @@ function App(){
       if(orgId)DB.updateSubscription(orgId,{plan:id,status:"trial",trialEnd:trialEnd.toISOString()}).catch(e=>console.error(e));
       return;
     }
-    // Paid subscription
-    const expiresAt=new Date(now);
-    if(billing==="year"){expiresAt.setFullYear(expiresAt.getFullYear()+1)}else{expiresAt.setMonth(expiresAt.getMonth()+1)}
-    const newSub={...store.sub,plan:id,status:"active",billing:billing||"month",expiresAt:expiresAt.toISOString(),activatedAt:now.toISOString()};
-    setStore(p=>({...p,sub:newSub}));
+    // Paid subscription — activated via Cloud Function (server-side validation)
     if(orgId){
-      DB.updateSubscription(orgId,{plan:id,status:"active",billing:billing||"month",expiresAt:expiresAt.toISOString(),activatedAt:now.toISOString()}).catch(e=>console.error(e));
-      // Save invoice
-      const plan=PLANS.find(p=>p.id===id);
-      const price=billing==="year"?plan.yearPrice:plan.price;
-      DB.addInvoice(orgId,{plan:plan.name,amount:price,billing,method,status:"betaald",date:new Date().toISOString()}).catch(e=>console.error(e));
+      try{
+        const result=await functions.httpsCallable('activateSubscription')({planId:id,method:method||"paypal",billing:billing||"month"});
+        if(result.data.success){
+          setStore(p=>({...p,sub:{...p.sub,...result.data}}));
+        }
+      }catch(e){
+        console.error("Subscription activation error:",e);
+        notify({title:"Activatie mislukt",msg:e.message||"Probeer opnieuw",type:"error"});
+      }
     }
   };
 
