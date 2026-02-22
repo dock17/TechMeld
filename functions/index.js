@@ -232,8 +232,8 @@ const PLANS_SERVER = {
 const PAYPAL_BASE = "https://api-m.paypal.com";
 
 async function getPayPalAccessToken() {
-  const clientId = process.env.PAYPAL_CLIENT_ID;
-  const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
+  const clientId = (process.env.PAYPAL_CLIENT_ID||"").trim();
+  const clientSecret = (process.env.PAYPAL_CLIENT_SECRET||"").trim();
   if (!clientId || !clientSecret) throw new Error("PayPal credentials not configured");
   const res = await fetch(PAYPAL_BASE + "/v1/oauth2/token", {
     method: "POST",
@@ -243,7 +243,11 @@ async function getPayPalAccessToken() {
     },
     body: "grant_type=client_credentials",
   });
-  if (!res.ok) throw new Error("PayPal auth failed: " + res.status);
+  if (!res.ok) {
+    const errBody = await res.text();
+    console.error("PayPal auth error:", res.status, errBody);
+    throw new Error("PayPal auth failed: " + res.status);
+  }
   const data = await res.json();
   return data.access_token;
 }

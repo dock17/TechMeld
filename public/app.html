@@ -2306,11 +2306,12 @@ function App(){
   const[paypalReturn,setPaypalReturn]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
     const status=params.get("paypal_status");
-    const token=params.get("token");
-    if(status&&token){
-      window.history.replaceState({},"",window.location.pathname);
-      return{status,orderId:token};
-    }
+    if(!status)return null;
+    // PayPal may return token param, or we fall back to sessionStorage
+    var orderId=params.get("token");
+    if(!orderId){try{var saved=JSON.parse(sessionStorage.getItem("tm_paypal_order")||"{}");orderId=saved.orderId}catch(e){}}
+    window.history.replaceState({},"",window.location.pathname);
+    if(orderId)return{status,orderId};
     return null;
   });
 
