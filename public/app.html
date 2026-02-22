@@ -954,12 +954,13 @@ const Pricing=({sub,org,onSelect,onBack,onNotify})=>{
 // SIDEBAR (dark)
 // ═══════════════════════════════════════════
 const TECH_BLOCKED=["rapportage","groep","vergelijk","users","billing","settings"];
-const Sidebar=({active,onNav,user,onLogout,sub})=>{
+const Sidebar=({active,onNav,user,onLogout,sub,impersonating})=>{
   var isSA=user?.role==="superadmin";
   var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.reporter;
   if(user?.role==="technician"){userPerms=userPerms.filter(function(p){return !TECH_BLOCKED.includes(p)})}
   const isGroep=sub?.plan==="groep";
-  const items=isSA?[{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]:[{id:"dashboard",ic:"dashboard",l:"Dashboard"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuwe Melding"},{id:"building",ic:"building",l:"Gebouwen"},{id:"floorplans",ic:"floor",l:"Plattegronden"},{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)});
+  const allOrgItems=[{id:"dashboard",ic:"dashboard",l:"Dashboard"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuwe Melding"},{id:"building",ic:"building",l:"Gebouwen"},{id:"floorplans",ic:"floor",l:"Plattegronden"},{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]);
+  const items=isSA?(impersonating?allOrgItems.concat([{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]):[{id:"admin",ic:"shield",l:"⚡ Admin Panel"}]):allOrgItems.filter(function(it){return userPerms.includes(it.id)});
   const pl=PLANS.find(p=>p.id===sub?.plan);
   return <div className="desktop-sidebar" style={{width:230,height:"100%",background:C.sbBg,display:"flex",flexDirection:"column",flexShrink:0,overflow:"auto"}}>
     <div style={{padding:"16px 14px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid rgba(255,255,255,.06)"}}>
@@ -984,13 +985,14 @@ const Sidebar=({active,onNav,user,onLogout,sub})=>{
   </div>;
 };
 
-const MobileNav=({active,onNav,user,onLogout,sub})=>{
+const MobileNav=({active,onNav,user,onLogout,sub,impersonating})=>{
   const[showMenu,setShowMenu]=useState(false);
+  var isSA=user?.role==="superadmin";
   var userPerms=user?.perms||DEFAULT_PERMS[user?.role]||DEFAULT_PERMS.reporter;
   if(user?.role==="technician"){userPerms=userPerms.filter(function(p){return !TECH_BLOCKED.includes(p)})}
   const isGroep=sub?.plan==="groep";
-  const items=[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}].filter(function(it){return it.id==="menu"||userPerms.includes(it.id)});
-  var menuItems=[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(user?.role==="superadmin"?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
+  const items=(isSA&&impersonating)?[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}]:[{id:"dashboard",ic:"dashboard",l:"Home"},{id:"meldingen",ic:"report",l:"Meldingen"},{id:"new",ic:"plus",l:"Nieuw"},{id:"building",ic:"building",l:"Gebouwen"},{id:"menu",ic:"settings",l:"Menu"}].filter(function(it){return it.id==="menu"||userPerms.includes(it.id)});
+  var menuItems=(isSA&&impersonating)?[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"},{id:"admin",ic:"shield",l:"⚡ Admin"}]):[{id:"users",ic:"users",l:"Gebruikers"},{id:"rapportage",ic:"stats",l:"Rapportage"},{id:"floorplans",ic:"floor",l:"Plattegronden"}].concat(isGroep?[{id:"groep",ic:"groep",l:"Groepsdashboard"},{id:"locaties",ic:"locatie",l:"Locaties"},{id:"vergelijk",ic:"vergelijk",l:"Vergelijking"}]:[]).concat([{id:"billing",ic:"card",l:"Abonnement"},{id:"settings",ic:"settings",l:"Instellingen"}]).filter(function(it){return userPerms.includes(it.id)}).concat(isSA?[{id:"admin",ic:"shield",l:"⚡ Admin"}]:[]);
   return <><div className="mobile-nav">{items.map(it=><button key={it.id} onClick={function(){if(it.id==="menu")setShowMenu(!showMenu);else{setShowMenu(false);onNav(it.id)}}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"5px 2px",border:"none",cursor:"pointer",borderRadius:6,background:"transparent",color:(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}}>
     {it.id==="new"?<div style={{width:38,height:38,borderRadius:19,marginTop:-16,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(37,99,235,.3)"}}><Icon name="plus" size={22} color="white"/></div>:<Icon name={it.ic} size={18} color={(active===it.id||(it.id==="menu"&&showMenu))?C.accent:C.dim}/>}
     <span style={{fontSize:9,fontWeight:(active===it.id||(it.id==="menu"&&showMenu))?600:400}}>{it.l}</span>
@@ -2464,7 +2466,7 @@ function App(){
   useEffect(()=>{if(authed&&!store.curUser&&!firebaseReady)setStore(p=>({...p,curUser:p.users[0]}))},[authed]);
 
   const notify=useCallback(({title,msg="",type="info"})=>{const id=uid();setToasts(p=>[...p,{id,title,msg,type}]);setTimeout(()=>setToasts(p=>p.filter(n=>n.id!==id)),4000)},[]);
-  const nav=useCallback((pg,id=null)=>{setPage(pg);if(id)setDetId(id);try{sessionStorage.setItem("tm_page",pg)}catch(e){}},[]);
+  const nav=useCallback((pg,id=null)=>{if(pg==="admin"){setImpersonating(null);setOrgId(null)}setPage(pg);if(id)setDetId(id);try{sessionStorage.setItem("tm_page",pg)}catch(e){}},[]);
 
   // PayPal return: capture payment after redirect back
   useEffect(()=>{
@@ -2659,7 +2661,7 @@ function App(){
       <div style={{fontSize:13,opacity:.9,lineHeight:1.5}}>Tik op <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:"middle",margin:"0 2px"}}><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> (Deel) en kies <strong>'Zet op beginscherm'</strong></div>
       <div style={{marginTop:8,textAlign:"center"}}><svg width="20" height="10" viewBox="0 0 20 10" fill="#fff"><polygon points="10,10 0,0 20,0"/></svg></div>
     </div>}
-    <Sidebar active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub}/>
+    <Sidebar active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} impersonating={impersonating}/>
     <main ref={mainRef} className="main-content" style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column",position:"relative"}}>
       <PullToRefresh containerRef={mainRef}>
       {impersonating&&<div style={{background:"linear-gradient(90deg,#dc2626,#b91c1c)",color:"#fff",padding:"6px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
@@ -2677,7 +2679,7 @@ function App(){
       </div>
       </PullToRefresh>
     </main>
-    <MobileNav active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub}/>
+    <MobileNav active={page==="detail"?"meldingen":page} onNav={nav} user={store.curUser} onLogout={handleLogout} sub={isSuperAdmin?{...store.sub,status:"active"}:store.sub} impersonating={impersonating}/>
   </div>;
 }
 ReactDOM.render(<App/>,document.getElementById('root'));
